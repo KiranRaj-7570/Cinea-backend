@@ -2,10 +2,15 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // REGISTER
+router.get("/me", verifyToken, async (req, res) => {
+  res.json({ user: req.user });
+});
+
 router.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -18,7 +23,7 @@ router.post("/signup", async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
 
     const user = new User({ name, email, password: hashed });
-    await user.save(); 
+    await user.save();
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -26,8 +31,22 @@ router.post("/signup", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    res.status(201).json({ token, user });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false, // change to true in production (HTTPS)
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
 
+    res.status(201).json({
+      message: "Login successful",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (error) {
     console.error("Signup Error:", error);
 
@@ -54,7 +73,22 @@ router.post("/login", async (req, res) => {
     { expiresIn: "1d" }
   );
 
-  res.json({ token, user });
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: false, // change to true in production (HTTPS)
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+
+  res.status(201).json({
+    message: "Login successful",
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  });
 });
 
 export default router;

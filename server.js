@@ -1,15 +1,23 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
-import { protect } from "./middleware/authMiddleware.js";
+import { verifyToken } from "./middleware/authMiddleware.js";
 import { adminOnly } from "./middleware/adminMiddleware.js";
 
 dotenv.config();
 const app = express();
 
-app.use(cors());
+app.use(cookieParser());
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 connectDB();
@@ -18,7 +26,7 @@ connectDB();
 app.use("/auth", authRoutes);
 
 // Simple protected route
-app.get("/profile", protect, (req, res) => {
+app.get("/profile", verifyToken, (req, res) => {
   res.json({
     message: "Protected route accessed",
     user: req.user, // will contain id & role
@@ -26,7 +34,7 @@ app.get("/profile", protect, (req, res) => {
 });
 
 // Admin-only test route
-app.get("/admin-test", protect, adminOnly, (req, res) => {
+app.get("/admin-test", verifyToken, adminOnly, (req, res) => {
   res.json({
     message: "Welcome, Admin! Admin route accessed successfully.",
   });
