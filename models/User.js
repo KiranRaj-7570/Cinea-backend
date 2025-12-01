@@ -29,7 +29,7 @@ const UserSchema = new mongoose.Schema(
 
     avatar: {
       type: String,
-      default: "", // Will store Cloudinary image URL
+      default: "",
     },
 
     bio: {

@@ -22,18 +22,18 @@ app.use(express.json());
 
 connectDB();
 
-// Routes
+
 app.use("/auth", authRoutes);
 
-// Simple protected route
+
 app.get("/profile", verifyToken, (req, res) => {
   res.json({
     message: "Protected route accessed",
-    user: req.user, // will contain id & role
+    user: req.user, 
   });
 });
 
-// Admin-only test route
+
 app.get("/admin-test", verifyToken, adminOnly, (req, res) => {
   res.json({
     message: "Welcome, Admin! Admin route accessed successfully.",
@@ -41,7 +41,7 @@ app.get("/admin-test", verifyToken, adminOnly, (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("Cinéa Backend Running 🚀");
+  res.send("Backend Running");
 });
 
 const PORT = process.env.PORT || 5000;
