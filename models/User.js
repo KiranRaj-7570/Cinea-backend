@@ -51,6 +51,8 @@ const UserSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    resetOtp: String,
+    resetOtpExpire: Date,
   },
   { timestamps: true }
 );

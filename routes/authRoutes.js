@@ -8,6 +8,9 @@ import {
   logout,
   uploadAvatar,
   removeAvatar,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
 } from "../controllers/authController.js";
 import { upload } from "../config/cloudinary.js";
 
@@ -19,6 +22,9 @@ router.get("/me", verifyToken, getMe);
 router.patch("/me", verifyToken, updateProfile);
 router.post("/upload-avatar", verifyToken, upload.single("avatar"), uploadAvatar);
 router.delete("/remove-avatar", verifyToken, removeAvatar);
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-otp", verifyOtp);
+router.post("/reset-password", resetPassword);
 router.post("/logout", verifyToken, logout);
 
 export default router;

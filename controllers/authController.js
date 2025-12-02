@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import cloudinary from "../config/cloudinary.js";
 import User from "../models/User.js";
 import fs from "fs";
+import nodemailer from "nodemailer";
 
 // SIGNUP
 export const signup = async (req, res) => {
@@ -144,7 +145,6 @@ export const uploadAvatar = async (req, res) => {
       msg: "Avatar updated successfully",
       user: updatedUser,
     });
-
   } catch (err) {
     console.error("Upload Avatar Error:", err.message);
     return res.status(500).json({ msg: "Server error" });
@@ -176,9 +176,127 @@ export const removeAvatar = async (req, res) => {
       msg: "Avatar removed successfully",
       user: updatedUser,
     });
-
   } catch (err) {
     console.error("Remove Avatar Error:", err.message);
+    return res.status(500).json({ msg: "Server error" });
+  }
+};
+
+//Forgot Pass
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ msg: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ msg: "No account with this email" });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    user.resetOtp = otp;
+    user.resetOtpExpire = expiry;
+    await user.save();
+
+    // Email Transport
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Cinéa Support" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: "Cinéa Password Reset OTP",
+      text: `Your OTP for resetting your password is: ${otp}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ msg: "OTP sent to email" });
+  } catch (err) {
+    console.error("Forgot Password Error:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
+//verify OTP
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({
+      email,
+      resetOtp: otp,
+      resetOtpExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ msg: "Invalid or expired OTP" });
+    }
+
+    res.json({ msg: "OTP Verified" });
+  } catch (err) {
+    console.error("Verify OTP Error:", err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
+//reset Pass
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    const user = await User.findOne({
+      email,
+      resetOtp: otp,
+      resetOtpExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ msg: "Invalid or expired OTP" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    user.password = hashed;
+    user.resetOtp = undefined;
+    user.resetOtpExpire = undefined;
+    await user.save();
+
+    // Automatically authenticate user and set cookie ✨
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      msg: "Password reset successful",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+        bio: user.bio,
+        followers: user.followers,
+        following: user.following,
+      },
+    });
+  } catch (err) {
+    console.error("Reset Password Error:", err.message);
     return res.status(500).json({ msg: "Server error" });
   }
 };
