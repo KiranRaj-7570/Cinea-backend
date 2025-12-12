@@ -4,6 +4,11 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import movieRoutes from "./routes/movieRoutes.js"
+import tvRoutes from "./routes/tvRoutes.js";
+import watchlistRoutes from "./routes/watchlistRoutes.js";
+import progressRoutes from "./routes/progressRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 import { verifyToken } from "./middleware/authMiddleware.js";
 import { adminOnly } from "./middleware/adminMiddleware.js";
 
@@ -24,6 +29,11 @@ connectDB();
 
 
 app.use("/auth", authRoutes);
+app.use("/movies", movieRoutes);
+app.use("/shows", tvRoutes);
+app.use("/watchlist", watchlistRoutes);
+app.use("/progress/tv", progressRoutes);
+app.use("/reviews", reviewRoutes);
 
 
 app.get("/profile", verifyToken, (req, res) => {
