@@ -73,6 +73,7 @@ export const login = async (req, res) => {
 
   res.json({
     msg: "Login successful",
+    token : token,
     user: {
       id: user._id,
       name: user.name,
@@ -297,6 +298,51 @@ export const resetPassword = async (req, res) => {
     });
   } catch (err) {
     console.error("Reset Password Error:", err.message);
+    return res.status(500).json({ msg: "Server error" });
+  }
+};
+
+export const followOrUnfollowUser = async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user.id;
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ msg: "You cannot follow yourself" });
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    const currentUser = await User.findById(currentUserId);
+
+    if (!targetUser || !currentUser) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    const isFollowing = currentUser.following.includes(targetUserId);
+
+    if (isFollowing) {
+      // 🔴 UNFOLLOW
+      currentUser.following.pull(targetUserId);
+      targetUser.followers.pull(currentUserId);
+    } else {
+      // 🟢 FOLLOW
+      currentUser.following.push(targetUserId);
+      targetUser.followers.push(currentUserId);
+    }
+
+    await currentUser.save();
+    await targetUser.save();
+
+    // Return UPDATED logged-in user (important for realtime UI)
+    const updatedCurrentUser = await User.findById(currentUserId).select("-password");
+
+    return res.json({
+      msg: isFollowing ? "Unfollowed successfully" : "Followed successfully",
+      user: updatedCurrentUser,
+      isFollowing: !isFollowing,
+    });
+  } catch (err) {
+    console.error("Follow/Unfollow Error:", err);
     return res.status(500).json({ msg: "Server error" });
   }
 };

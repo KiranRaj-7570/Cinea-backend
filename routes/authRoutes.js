@@ -11,6 +11,7 @@ import {
   forgotPassword,
   verifyOtp,
   resetPassword,
+  followOrUnfollowUser,
 } from "../controllers/authController.js";
 import { upload } from "../config/cloudinary.js";
 
@@ -25,6 +26,7 @@ router.delete("/remove-avatar", verifyToken, removeAvatar);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", resetPassword);
+router.post("/:id/follow", verifyToken, followOrUnfollowUser);
 router.post("/logout", verifyToken, logout);
 
 export default router;

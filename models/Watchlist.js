@@ -9,6 +9,7 @@ const WatchlistSchema = new mongoose.Schema(
     poster: { type: String },
     backdrop: { type: String },
     addedAt: { type: Date, default: Date.now },
+    completed: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

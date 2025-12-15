@@ -1,5 +1,6 @@
 import Review from "../models/Review.js";
 import User from "../models/User.js";
+import { delCache } from "../utils/cache.js";
 
 export const createReview = async (req, res) => {
   try {
@@ -25,6 +26,7 @@ export const createReview = async (req, res) => {
     });
 
     await review.save();
+    delCache(`profileStats:${userId}`);
     return res.status(201).json({ message: "Review created", review });
   } catch (err) {
     console.error("Create review error:", err);
