@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Show from "../models/Show.js";
 import Theatre from "../models/Theatre.js";
 import { cleanupExpiredLocks } from "../utils/cleanupLocks.js";
@@ -66,7 +67,13 @@ export const getShowsByMovie = async (req, res) => {
  */
 export const getShowById = async (req, res) => {
   try {
-    const show = await Show.findById(req.params.showId).populate("theatreId");
+    const { showId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(showId)) {
+      return res.status(400).json({ message: "Invalid show id" });
+    }
+
+    const show = await Show.findById(showId).populate("theatreId");
 
     if (!show) {
       return res.status(404).json({ message: "Show not found" });

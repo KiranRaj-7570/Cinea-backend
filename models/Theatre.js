@@ -21,6 +21,8 @@ const TheatreSchema = new mongoose.Schema(
     name: { type: String, required: true },
     city: { type: String, required: true },
     screens: [ScreenSchema],
+
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

@@ -34,7 +34,18 @@ export const createShow = async (req, res) => {
     if (!theatre) {
       return res.status(404).json({ message: "Theatre not found" });
     }
+    const exists = await Show.findOne({
+      theatreId,
+      screenNumber,
+      date,
+      time,
+    });
 
+    if (exists) {
+      return res.status(409).json({
+        message: "Show already exists for this screen & time",
+      });
+    }
     const screenExists = theatre.screens.some(
       (s) => s.screenNumber === screenNumber
     );
@@ -75,4 +86,14 @@ export const getAllShows = async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch shows" });
   }
+};
+
+export const deleteShow = async (req, res) => {
+  const show = await Show.findById(req.params.id);
+  if (!show) {
+    return res.status(404).json({ message: "Show not found" });
+  }
+
+  await show.deleteOne();
+  res.json({ message: "Show deleted" });
 };

@@ -96,7 +96,7 @@ export const getTopRatedMovies = async (req, res) => {
       .filter((m) => m.poster_path)
       .map(mapMovie);
 
-    setCache(cacheKey, results, 3600); // 1 hr
+    setCache(cacheKey, results, 3600); // 1 hrz 
     res.json({ results, cached: false });
   } catch {
     res.status(500).json({ msg: "Failed to fetch top-rated movies" });
