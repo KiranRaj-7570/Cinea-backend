@@ -1,10 +1,16 @@
+// utils/tmdb.js
 import axios from "axios";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const API_KEY = process.env.TMDB_API_KEY;
 
-// Fetch helper
-export const fetchTMDB = async (url, params = {}) => {
+if (!API_KEY) {
+  console.error("❌ TMDB_API_KEY missing");
+}
+
+export const fetchTMDB = async (path, params = {}) => {
+  const url = `${TMDB_BASE}${path}`;
+
   const { data } = await axios.get(url, {
     params: {
       api_key: API_KEY,
@@ -12,10 +18,11 @@ export const fetchTMDB = async (url, params = {}) => {
       ...params,
     },
   });
+
   return data;
 };
 
-// Transform movie → unified format
+// keep this if you want, but DO NOT use it to build URLs
 export const mapMovie = (item) => ({
   id: item.id,
   title: item.title,
@@ -25,5 +32,3 @@ export const mapMovie = (item) => ({
   popularity: item.popularity,
   release_date: item.release_date,
 });
-
-export const TMDB_BASE_URL = TMDB_BASE;

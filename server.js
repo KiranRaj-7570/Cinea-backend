@@ -11,6 +11,7 @@ import watchlistRoutes from "./routes/watchlistRoutes.js";
 import progressRoutes from "./routes/progressRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
+import bookRoutes from "./routes/bookRoutes.js";
 import showRoutes from "./routes/showRoutes.js";
 import adminTheatreRoutes from "./routes/adminTheatreRoutes.js";
 import adminShowRoutes from "./routes/adminShowRoutes.js";
@@ -39,6 +40,7 @@ app.use("/tvshows", tvRoutes);
 app.use("/watchlist", watchlistRoutes); 
 app.use("/progress/tv", progressRoutes);
 app.use("/reviews", reviewRoutes);
+app.use("/book", bookRoutes);
 app.use("/booking", bookingRoutes);
 app.use("/shows", showRoutes);
 

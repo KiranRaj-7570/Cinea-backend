@@ -1,8 +1,4 @@
-import {
-  fetchTMDB,
-  mapMovie,
-  TMDB_BASE_URL,
-} from "../utils/tmdb.js";
+import { fetchTMDB, mapMovie } from "../utils/tmdb.js";
 import { getCache, setCache } from "../utils/cache.js";
 
 // 🔎 SEARCH MOVIES
@@ -15,10 +11,7 @@ export const searchMovies = async (req, res) => {
     const cached = getCache(cacheKey);
     if (cached) return res.json({ results: cached, cached: true });
 
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/search/movie`,
-      { query, include_adult: false }
-    );
+    const data = await fetchTMDB("/search/movie", { query, include_adult: false })
 
     const results = (data.results || [])
       .filter((m) => m.poster_path)
@@ -42,9 +35,7 @@ export const getTrendingMovies = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/trending/movie/week`
-    );
+    const data = await fetchTMDB("/trending/movie/week")
 
     const results = (data.results || [])
       .filter((m) => m.poster_path)
@@ -65,13 +56,9 @@ export const getPopularMovies = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/movie/popular`
-    );
+    const data = await fetchTMDB("/movie/popular")
 
-    const results = data.results
-      .filter((m) => m.poster_path)
-      .map(mapMovie);
+    const results = data.results.filter((m) => m.poster_path).map(mapMovie);
 
     setCache(cacheKey, results, 3600); // 1 hr
     res.json({ results, cached: false });
@@ -88,15 +75,11 @@ export const getTopRatedMovies = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/movie/top_rated`
-    );
+    const data = await fetchTMDB("/movie/top_rated")
 
-    const results = data.results
-      .filter((m) => m.poster_path)
-      .map(mapMovie);
+    const results = data.results.filter((m) => m.poster_path).map(mapMovie);
 
-    setCache(cacheKey, results, 3600); // 1 hrz 
+    setCache(cacheKey, results, 3600); // 1 hrz
     res.json({ results, cached: false });
   } catch {
     res.status(500).json({ msg: "Failed to fetch top-rated movies" });
@@ -112,13 +95,9 @@ export const getMovieDetails = async (req, res) => {
   if (cached) return res.json({ ...cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/movie/${id}`,
-      {
-        append_to_response:
-          "videos,credits,images,recommendations",
-      }
-    );
+    const data = await fetchTMDB(`/movie/${id}`, {
+      append_to_response: "videos,credits,images,recommendations",
+    });
 
     setCache(cacheKey, data, 21600); // 6 hrs
     res.json({ ...data, cached: false });
@@ -139,9 +118,7 @@ export const getSimilarMovies = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/movie/${id}/similar`
-    );
+    const data = await fetchTMDB(`/movie/${id}/similar`)
 
     const results = (data.results || [])
       .filter((m) => m.poster_path)

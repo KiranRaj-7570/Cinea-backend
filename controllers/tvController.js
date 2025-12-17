@@ -1,7 +1,4 @@
-import {
-  fetchTMDB,
-  TMDB_BASE_URL,
-} from "../utils/tmdb.js";
+import { fetchTMDB } from "../utils/tmdb.js";
 import { getCache, setCache } from "../utils/cache.js";
 
 // Transform TV show → unified format
@@ -26,10 +23,10 @@ export const searchTV = async (req, res) => {
     const cached = getCache(cacheKey);
     if (cached) return res.json({ results: cached, cached: true });
 
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/search/tv`,
-      { query, include_adult: false }
-    );
+    const data = await fetchTMDB("/search/tv", {
+      query,
+      include_adult: false,
+    });
 
     const results = (data.results || [])
       .filter((s) => s.poster_path)
@@ -53,9 +50,7 @@ export const getTrendingTV = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/trending/tv/week`
-    );
+    const data = await fetchTMDB("/trending/tv/week");
 
     const results = (data.results || [])
       .filter((s) => s.backdrop_path)
@@ -76,13 +71,9 @@ export const getPopularTV = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/tv/popular`
-    );
+    const data = await fetchTMDB("/tv/popular");
 
-    const results = data.results
-      .filter((s) => s.backdrop_path)
-      .map(mapShow);
+    const results = data.results.filter((s) => s.backdrop_path).map(mapShow);
 
     setCache(cacheKey, results, 3600);
     res.json({ results, cached: false });
@@ -99,13 +90,9 @@ export const getTopRatedTV = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/tv/top_rated`
-    );
+    const data = await fetchTMDB("/tv/top_rated");
 
-    const results = data.results
-      .filter((s) => s.backdrop_path)
-      .map(mapShow);
+    const results = data.results.filter((s) => s.backdrop_path).map(mapShow);
 
     setCache(cacheKey, results, 3600);
     res.json({ results, cached: false });
@@ -123,13 +110,9 @@ export const getTVDetails = async (req, res) => {
   if (cached) return res.json({ ...cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/tv/${id}`,
-      {
-        append_to_response:
-          "videos,credits,images,recommendations",
-      }
-    );
+    const data = await fetchTMDB(`/tv/${id}`, {
+      append_to_response: "videos,credits,images,recommendations",
+    });
 
     setCache(cacheKey, data, 21600);
     res.json({ ...data, cached: false });
@@ -150,9 +133,7 @@ export const getSimilarTV = async (req, res) => {
   if (cached) return res.json({ results: cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/tv/${id}/similar`
-    );
+    const data = await fetchTMDB(`/tv/${id}/similar`);
 
     const results = (data.results || [])
       .filter((s) => s.backdrop_path)
@@ -174,9 +155,7 @@ export const getSeasonEpisodes = async (req, res) => {
   if (cached) return res.json({ ...cached, cached: true });
 
   try {
-    const data = await fetchTMDB(
-      `${TMDB_BASE_URL}/tv/${id}/season/${seasonNumber}`
-    );
+    const data = await fetchTMDB(`/tv/${id}/season/${seasonNumber}`)
 
     setCache(cacheKey, data, 21600);
     res.json({ ...data, cached: false });

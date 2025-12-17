@@ -3,6 +3,7 @@ import Booking from "../models/Booking.js";
 import Show from "../models/Show.js";
 import razorpay from "../config/razorpay.js";
 import { cleanupExpiredLocks } from "../utils/cleanupLocks.js";
+import { fetchTMDB } from "../utils/tmdb.js";
 
 /**
  * POST /api/bookings/create
@@ -154,5 +155,87 @@ export const paymentFailed = async (req, res) => {
   } catch (err) {
     console.error("Payment failed handler error", err);
     res.sendStatus(500);
+  }
+};
+
+export const getMyBookings = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const bookings = await Booking.find({
+      userId,
+      paymentStatus: "paid", // ✅ hide failed payments
+    }).sort({ createdAt: -1 });
+
+    const result = await Promise.all(
+      bookings.map(async (b) => {
+        const show = await Show.findById(b.showId).populate("theatreId");
+
+        // ✅ THIS IS THE ONLY CORRECT WAY
+        const movie = await fetchTMDB(`/movie/${b.movieId}`);
+
+        return {
+          bookingId: b._id,
+          status: b.paymentStatus,
+          seats: b.seats,
+
+          movie: {
+            title: movie.title,
+            poster: movie.poster_path,
+          },
+
+          show: {
+            theatre: show.theatreId.name,
+            date: show.date,
+            time: show.time,
+          },
+        };
+      })
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error("My bookings error", err);
+    res.status(500).json({ message: "Failed to fetch bookings" });
+  }
+};
+
+
+export const getBookingTicket = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({
+      _id: req.params.bookingId,
+      userId: req.user.id,
+      paymentStatus: "paid",
+    }).populate({
+      path: "showId",
+      populate: { path: "theatreId" },
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    const movie = await fetchTMDB(`/movie/${booking.movieId}`);
+
+    res.json({
+      bookingId: booking._id,
+      seats: booking.seats,
+      amount: booking.amount,
+
+      movie: {
+        title: movie.title,
+        poster: movie.poster_path,
+      },
+
+      show: {
+        date: booking.showId.date,
+        time: booking.showId.time,
+        theatre: booking.showId.theatreId.name,
+        screen: booking.showId.screenNumber,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load ticket" });
   }
 };
