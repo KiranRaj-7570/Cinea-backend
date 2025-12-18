@@ -20,7 +20,7 @@ const BookingSchema = new mongoose.Schema(
     },
 
     seats: {
-      type: [String], // ["A1","A2"]
+      type: [String],
       required: true,
     },
 
@@ -29,10 +29,23 @@ const BookingSchema = new mongoose.Schema(
       required: true,
     },
 
+    // 💳 PAYMENT STATUS (strictly payment)
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
+      enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
+    },
+
+    // 🎟 BOOKING LIFECYCLE STATUS
+    bookingStatus: {
+      type: String,
+      enum: ["active", "cancelled", "expired"],
+      default: "active",
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
     },
 
     razorpayOrderId: String,

@@ -70,3 +70,8 @@ export const deleteTheatre = async (req, res) => {
 
   res.json({ message: "Theatre deactivated" });
 };
+
+export const getCities = async (req, res) => {
+  const cities = await Theatre.distinct("city", { isActive: true });
+  res.json(cities);
+};

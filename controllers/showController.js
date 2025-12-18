@@ -22,7 +22,17 @@ export const getShowsByMovie = async (req, res) => {
 
     const grouped = {};
 
+    const now = new Date();
+
     shows.forEach((show) => {
+      // 🕒 build full show datetime
+      const showDateTime = new Date(`${show.date}T${show.time}:00`);
+
+      // ❌ skip past shows ONLY for today
+      if (show.date === now.toISOString().slice(0, 10) && showDateTime <= now) {
+        return;
+      }
+
       const tid = show.theatreId._id.toString();
 
       if (!grouped[tid]) {
@@ -33,7 +43,7 @@ export const getShowsByMovie = async (req, res) => {
         };
       }
 
-      // ✅ calculate total seats dynamically (NO hardcoded 150)
+      // ✅ calculate total seats dynamically
       const screen = show.theatreId.screens.find(
         (s) => s.screenNumber === show.screenNumber
       );
@@ -65,6 +75,9 @@ export const getShowsByMovie = async (req, res) => {
 /**
  * GET /shows/:showId
  */
+/**
+ * GET /shows/:showId
+ */
 export const getShowById = async (req, res) => {
   try {
     const { showId } = req.params;
@@ -79,6 +92,17 @@ export const getShowById = async (req, res) => {
       return res.status(404).json({ message: "Show not found" });
     }
 
+    // 🔥 FIND SCREEN LAYOUT
+    const screen = show.theatreId.screens.find(
+      (s) => s.screenNumber === show.screenNumber
+    );
+
+    if (!screen) {
+      return res.status(500).json({
+        message: "Screen layout not found for this show",
+      });
+    }
+
     res.json({
       showId: show._id,
       date: show.date,
@@ -86,6 +110,10 @@ export const getShowById = async (req, res) => {
       language: show.language,
       format: show.format,
       theatreName: show.theatreId.name,
+
+      // ✅ THIS WAS MISSING
+      seatLayout: screen.seatLayout,
+      priceMap: show.priceMap, // for future price calc
     });
   } catch (err) {
     console.error(err);

@@ -31,14 +31,10 @@ export const createBooking = async (req, res) => {
       .filter((s) => s.userId.toString() === userId)
       .map((s) => s.seatId);
 
-    const allLocked = seats.every((seat) =>
-      userLockedSeats.includes(seat)
-    );
+    const allLocked = seats.every((seat) => userLockedSeats.includes(seat));
 
     if (!allLocked) {
-      return res
-        .status(409)
-        .json({ message: "Seats are no longer locked" });
+      return res.status(409).json({ message: "Seats are no longer locked" });
     }
 
     // ✅ calculate amount using priceMap
@@ -160,32 +156,55 @@ export const paymentFailed = async (req, res) => {
 
 export const getMyBookings = async (req, res) => {
   try {
+    res.set("Cache-Control", "no-store");
     const userId = req.user.id;
 
-    const bookings = await Booking.find({
-      userId,
-      paymentStatus: "paid", // ✅ hide failed payments
-    }).sort({ createdAt: -1 });
+    const bookings = await Booking.find({ userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "showId",
+        populate: { path: "theatreId", select: "name" },
+      });
+
+    const now = new Date();
 
     const result = await Promise.all(
       bookings.map(async (b) => {
-        const show = await Show.findById(b.showId).populate("theatreId");
+        if (!b.showId) return null;
 
-        // ✅ THIS IS THE ONLY CORRECT WAY
-        const movie = await fetchTMDB(`/movie/${b.movieId}`);
+        const show = b.showId;
+        const showDateTime = new Date(`${show.date}T${show.time}`);
+
+        // ✅ COMPUTED STATUS (SOURCE OF TRUTH)
+        let status = "paid";
+
+        if (b.bookingStatus === "cancelled") status = "cancelled";
+        else if (showDateTime < now) status = "expired";
+
+        const canCancel =
+          status === "paid" && showDateTime - now > 60 * 60 * 1000;
+        // 🎬 TMDB
+        let movie = {};
+        try {
+          const data = await fetchTMDB(`/movie/${b.movieId}`);
+          movie = {
+            title: data.title,
+            poster: data.poster_path,
+          };
+        } catch {
+          movie = { title: "Movie", poster: null };
+        }
 
         return {
           bookingId: b._id,
-          status: b.paymentStatus,
+          createdAt: b.createdAt,
           seats: b.seats,
+          status, // ✅ THIS FIXES EVERYTHING
+          canCancel,
 
-          movie: {
-            title: movie.title,
-            poster: movie.poster_path,
-          },
-
+          movie,
           show: {
-            theatre: show.theatreId.name,
+            theatre: show.theatreId?.name || "Theatre",
             date: show.date,
             time: show.time,
           },
@@ -193,13 +212,12 @@ export const getMyBookings = async (req, res) => {
       })
     );
 
-    res.json(result);
+    res.json(result.filter(Boolean));
   } catch (err) {
     console.error("My bookings error", err);
     res.status(500).json({ message: "Failed to fetch bookings" });
   }
 };
-
 
 export const getBookingTicket = async (req, res) => {
   try {
@@ -214,6 +232,13 @@ export const getBookingTicket = async (req, res) => {
 
     if (!booking) {
       return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    // ❌ Cancelled booking
+    if (booking.bookingStatus === "cancelled") {
+      return res.status(403).json({
+        message: "This booking has been cancelled",
+      });
     }
 
     const movie = await fetchTMDB(`/movie/${booking.movieId}`);
@@ -236,6 +261,35 @@ export const getBookingTicket = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("Ticket load error", err);
     res.status(500).json({ message: "Failed to load ticket" });
+  }
+};
+
+
+export const cancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({
+      _id: req.params.bookingId,
+      userId: req.user.id,
+    });
+
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (booking.bookingStatus !== "active")
+      return res
+        .status(400)
+        .json({ message: "Booking already cancelled or expired" });
+
+    booking.bookingStatus = "cancelled";
+    booking.cancelledAt = new Date();
+    booking.paymentStatus = "refunded"; // or keep "paid" if no refund
+
+    await booking.save();
+
+    res.json({ message: "Booking cancelled successfully" });
+  } catch (err) {
+    console.error("Cancel booking error", err);
+    res.status(500).json({ message: "Cancel failed" });
   }
 };

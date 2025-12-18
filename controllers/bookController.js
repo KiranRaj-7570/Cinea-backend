@@ -32,19 +32,31 @@ export const getBookableMovies = async (req, res) => {
 
     // 3️⃣ Find shows for date
     const shows = await Show.find({
-      theatreId: { $in: theatreIds },
-      date: selectedDate,
-    });
+  theatreId: { $in: theatreIds },
+  date: selectedDate,
+});
 
-    if (shows.length === 0) {
-      setCache(cacheKey, []);
-      return res.json([]);
-    }
+// ⏰ filter past shows if date is today
+const now = new Date();
+const isToday =
+  selectedDate === new Date().toISOString().split("T")[0];
+
+const validShows = isToday
+  ? shows.filter((show) => {
+      const showTime = new Date(`${show.date}T${show.time}:00`);
+      return showTime > now;
+    })
+  : shows;
+
+if (validShows.length === 0) {
+  setCache(cacheKey, []);
+  return res.json([]);
+}
 
     // 4️⃣ Group by movieId
     const movieMap = {};
 
-    shows.forEach((show) => {
+    validShows.forEach((show) => {
       const id = show.movieId;
 
       if (!movieMap[id]) {
