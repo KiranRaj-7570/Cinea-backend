@@ -7,9 +7,9 @@ export const createReview = async (req, res) => {
     const userId = req.user.id;
     const { tmdbId, mediaType, rating, text, title, poster } = req.body;
     if (!tmdbId || !mediaType || !rating || !text) {
-      return res
-        .status(400)
-        .json({ message: "tmdbId, mediaType, rating and text required" });
+      return res.status(400).json({
+        message: "tmdbId, mediaType, rating and text required",
+      });
     }
 
     const user = await User.findById(userId).lean();
@@ -55,6 +55,69 @@ export const listReviews = async (req, res) => {
   } catch (err) {
     console.error("List reviews error:", err);
     return res.status(500).json({ message: "Failed to load reviews" });
+  }
+};
+
+export const updateReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+    const { text, rating } = req.body;
+
+    if (!text || !rating) {
+      return res.status(400).json({ message: "text and rating required" });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    // Only owner can edit
+    if (review.userId.toString() !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    review.text = text;
+    review.rating = Number(rating);
+    review.updatedAt = new Date();
+
+    await review.save();
+    delCache(`profileStats:${userId}`);
+
+    return res.json({ message: "Review updated", review });
+  } catch (err) {
+    console.error("Update review error:", err);
+    return res.status(500).json({ message: "Failed to update review" });
+  }
+};
+
+export const deleteReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+    const user = await User.findById(userId).lean();
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    // Owner or Admin can delete
+    const isOwner = review.userId.toString() === userId;
+    const isAdmin = user?.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    await Review.findByIdAndDelete(reviewId);
+    delCache(`profileStats:${review.userId}`);
+
+    return res.json({ message: "Review deleted" });
+  } catch (err) {
+    console.error("Delete review error:", err);
+    return res.status(500).json({ message: "Failed to delete review" });
   }
 };
 
