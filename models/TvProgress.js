@@ -20,6 +20,12 @@ const TvProgressSchema = new mongoose.Schema(
       season: { type: Number, default: 0 },
       episode: { type: Number, default: 0 },
     },
+    watchedEpisodes: [
+  {
+    episode: Number,
+    watchedAt: Date
+  }
+],
   },
   { timestamps: true }
 );

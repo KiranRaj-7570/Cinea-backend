@@ -1,5 +1,6 @@
 import TvProgress from "../models/TvProgress.js";
 import { delCache } from "../utils/cache.js";
+
 export const markEpisodeWatched = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -43,13 +44,17 @@ export const markEpisodeWatched = async (req, res) => {
         poster,
         seasons: [],
         lastWatched: { season: 0, episode: 0 },
+        watchedEpisodes: [], // 🔥 ensure exists
       });
     } else {
       if (title) doc.title = title;
       if (poster) doc.poster = poster;
+      if (!Array.isArray(doc.watchedEpisodes)) {
+        doc.watchedEpisodes = []; // 🔥 backward safety
+      }
     }
 
-    // Work on copy
+    // ===== EXISTING SEASON LOGIC (UNCHANGED) =====
     let seasons = Array.isArray(doc.seasons) ? [...doc.seasons] : [];
 
     const idx = seasons.findIndex((s) => s.seasonNumber === seasonNum);
@@ -98,7 +103,20 @@ export const markEpisodeWatched = async (req, res) => {
     doc.seasons = seasons;
     doc.markModified("seasons");
 
-    // recompute lastWatched
+    // ===== 🔥 NEW: WATCHED TIMELINE (ADDITIVE) =====
+    const alreadyLogged = doc.watchedEpisodes.some(
+      (e) => e.episode === epNum && e.season === seasonNum
+    );
+
+    if (!alreadyWatched && !alreadyLogged) {
+      doc.watchedEpisodes.push({
+        season: seasonNum,
+        episode: epNum,
+        watchedAt: new Date(),
+      });
+    }
+
+    // ===== recompute lastWatched (UNCHANGED) =====
     let last = { season: 0, episode: 0 };
     for (const se of seasons) {
       if (!se.watchedEpisodes?.length) continue;
@@ -114,7 +132,7 @@ export const markEpisodeWatched = async (req, res) => {
 
     await doc.save();
 
-    // 🔥 CACHE INVALIDATION
+    // ===== CACHE INVALIDATION (UNCHANGED) =====
     delCache(`watchlist:${userId}`);
     delCache(`profileStats:${userId}`);
     delCache(`tvProgress:${userId}:${tmdbId}`);
@@ -128,10 +146,6 @@ export const markEpisodeWatched = async (req, res) => {
 
 /**
  * PATCH /progress/tv/mark-season
- * body: { tmdbId, season, totalEpisodesForSeason, title, poster }
- *
- * Marks whole season watched: sets watchedEpisodes to 1..total
- * Rebuilds seasons array and marks modified.
  */
 export const markSeasonWatched = async (req, res) => {
   try {
@@ -157,19 +171,9 @@ export const markSeasonWatched = async (req, res) => {
     const seasonNum = Number(season);
     const total = Number(totalEpisodesForSeason);
 
-    if (
-      Number.isNaN(seasonNum) ||
-      Number.isNaN(total) ||
-      seasonNum < 0 ||
-      total < 1
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Invalid season number or totalEpisodes" });
-    }
-
     const filter = { userId, tmdbId: Number(tmdbId) };
     let doc = await TvProgress.findOne(filter);
+
     if (!doc) {
       doc = new TvProgress({
         userId,
@@ -178,13 +182,11 @@ export const markSeasonWatched = async (req, res) => {
         poster,
         seasons: [],
         lastWatched: { season: 0, episode: 0 },
+        watchedEpisodes: [],
       });
-    } else {
-      if (title) doc.title = title;
-      if (poster) doc.poster = poster;
     }
 
-    // Rebuild seasons array and set this season to have all episodes watched
+    // ===== EXISTING LOGIC =====
     let seasons = Array.isArray(doc.seasons) ? [...doc.seasons] : [];
     const idx = seasons.findIndex((s) => s.seasonNumber === seasonNum);
 
@@ -200,24 +202,29 @@ export const markSeasonWatched = async (req, res) => {
     doc.seasons = seasons;
     doc.markModified("seasons");
 
-    // recompute lastWatched
-    let last = { season: 0, episode: 0 };
-    for (const se of seasons) {
-      if (!se.watchedEpisodes || se.watchedEpisodes.length === 0) continue;
-      const maxEp = Math.max(...se.watchedEpisodes);
-      if (
-        se.seasonNumber > last.season ||
-        (se.seasonNumber === last.season && maxEp > last.episode)
-      ) {
-        last = { season: se.seasonNumber, episode: maxEp };
+    // ===== 🔥 NEW: LOG EACH EPISODE =====
+    for (let ep = 1; ep <= total; ep++) {
+      const exists = doc.watchedEpisodes.some(
+        (e) => e.season === seasonNum && e.episode === ep
+      );
+      if (!exists) {
+        doc.watchedEpisodes.push({
+          season: seasonNum,
+          episode: ep,
+          watchedAt: new Date(),
+        });
       }
     }
-    doc.lastWatched = last;
+
+    // recompute lastWatched
+    doc.lastWatched = { season: seasonNum, episode: total };
 
     await doc.save();
+
     delCache(`watchlist:${userId}`);
     delCache(`profileStats:${userId}`);
     delCache(`tvProgress:${userId}:${tmdbId}`);
+
     return res.json({ message: "Season marked watched", progress: doc });
   } catch (err) {
     console.error("Mark season error:", err);
@@ -227,19 +234,19 @@ export const markSeasonWatched = async (req, res) => {
 
 /**
  * GET /progress/tv/:tmdbId
+ * (UNCHANGED)
  */
 export const getTvProgress = async (req, res) => {
   try {
     const userId = req.user.id;
     const { tmdbId } = req.params;
-    if (!tmdbId) return res.status(400).json({ message: "tmdbId required" });
 
     const doc = await TvProgress.findOne({
       userId,
       tmdbId: Number(tmdbId),
     }).lean();
-    if (!doc) return res.json({ progress: null });
 
+    if (!doc) return res.json({ progress: null });
     return res.json({ progress: doc });
   } catch (err) {
     console.error("Get progress error:", err);

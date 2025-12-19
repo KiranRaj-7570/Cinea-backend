@@ -12,6 +12,7 @@ import {
   verifyOtp,
   resetPassword,
   followOrUnfollowUser,
+  getUserById,
 } from "../controllers/authController.js";
 import { upload } from "../config/cloudinary.js";
 
@@ -20,6 +21,7 @@ const router = express.Router();
 router.post("/signup", signup);
 router.post("/login", login);
 router.get("/me", verifyToken, getMe);
+router.get("/users/:id", verifyToken, getUserById);
 router.patch("/me", verifyToken, updateProfile);
 router.post("/upload-avatar", verifyToken, upload.single("avatar"), uploadAvatar);
 router.delete("/remove-avatar", verifyToken, removeAvatar);

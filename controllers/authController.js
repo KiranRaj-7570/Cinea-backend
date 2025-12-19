@@ -352,3 +352,17 @@ export const logout = (req, res) => {
   res.clearCookie("token");
   res.json({ msg: "Logged out successfully" });
 };
+
+
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("name bio avatar followers following");
+
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ msg: "Server error" });
+  }
+};

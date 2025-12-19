@@ -1,14 +1,18 @@
 import Review from "../models/Review.js";
 import TvProgress from "../models/TvProgress.js";
+import Watchlist from "../models/Watchlist.js";
 
 export const getProfileStats = async (req, res) => {
   try {
-    const userId = req.user.id;
+    // 🔥 IMPORTANT CHANGE
+    // if :userId param exists → use it
+    // else fallback to logged-in user
+    const targetUserId = req.params.userId || req.user.id;
 
     /* ===================== REVIEWS ===================== */
-    const reviews = await Review.find({ userId }).lean();
+    const reviews = await Review.find({ userId: targetUserId }).lean();
 
-    /* ---------- BEST & WORST (rating stable) ---------- */
+    /* ---------- BEST & WORST ---------- */
     let best = null;
     let worst = null;
 
@@ -17,55 +21,63 @@ export const getProfileStats = async (req, res) => {
       worst = reviews.reduce((a, b) => (b.rating < a.rating ? b : a));
     }
 
-    /* ---------- TOP 5 (rating DESC + recency DESC) ---------- */
-    const topFive = await Review.find({ userId })
+    /* ---------- TOP 5 ---------- */
+    const topFive = await Review.find({ userId: targetUserId })
       .sort({ rating: -1, createdAt: -1 })
       .limit(5)
       .select("title rating poster mediaType tmdbId")
       .lean();
 
     /* ---------- RECENT REVIEWS ---------- */
-    const recentReviews = await Review.find({ userId })
+    const recentReviews = await Review.find({ userId: targetUserId })
       .sort({ createdAt: -1 })
       .limit(3)
       .lean();
 
     /* ===================== GENRE DONUT ===================== */
-    /**
-     * IMPORTANT:
-     * Your Review schema DOES NOT store genres.
-     * So we DO NOT aggregate genres here.
-     * We send source data and let frontend (TMDB) handle it.
-     */
-    const genresSource = reviews.map(r => ({
-      tmdbId: r.tmdbId,
-      mediaType: r.mediaType,
+    const completedWatchlist = await Watchlist.find({
+      userId: targetUserId,
+      completed: true,
+    })
+      .select("tmdbId mediaType")
+      .lean();
+
+    const genresSource = completedWatchlist.map((item) => ({
+      tmdbId: item.tmdbId,
+      mediaType: item.mediaType,
     }));
 
-    /* ===================== WATCH TIME ===================== */
-    const tvDocs = await TvProgress.find({ userId }).lean();
+    /* ===================== WATCH TIME (HOURS) ===================== */
+    const tvDocs = await TvProgress.find({ userId: targetUserId }).lean();
+    const completedMovies = await Watchlist.find({
+      userId: targetUserId,
+      completed: true,
+      mediaType: "movie",
+    }).lean();
 
-    /**
-     * Each watched episode = 1 unit
-     * Group by DATE (not updatedAt)
-     */
     const watchTimeMap = {};
 
-    tvDocs.forEach(doc => {
-      doc.seasons.forEach(season => {
-        season.watchedEpisodes.forEach(() => {
-          const day = new Date(doc.createdAt).toISOString().slice(0, 10);
-          watchTimeMap[day] = (watchTimeMap[day] || 0) + 1;
-        });
+    // ---- TV episodes (45 min = 0.75 hr) ----
+    tvDocs.forEach((doc) => {
+      doc.watchedEpisodes?.forEach((ep) => {
+        if (!ep.watchedAt) return;
+        const day = new Date(ep.watchedAt).toISOString().slice(0, 10);
+        watchTimeMap[day] = (watchTimeMap[day] || 0) + 0.75;
       });
     });
 
-    const watchTime = Object.entries(watchTimeMap).map(
-      ([date, episodes]) => ({
+    // ---- Movies (2 hrs default) ----
+    completedMovies.forEach((movie) => {
+      const day = new Date(movie.updatedAt).toISOString().slice(0, 10);
+      watchTimeMap[day] = (watchTimeMap[day] || 0) + 2;
+    });
+
+    const watchTime = Object.entries(watchTimeMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, hours]) => ({
         date,
-        episodes, // frontend converts to minutes if needed
-      })
-    );
+        hours: Number(hours.toFixed(2)),
+      }));
 
     /* ===================== RESPONSE ===================== */
     res.json({
