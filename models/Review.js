@@ -11,6 +11,16 @@ const ReplySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const ReviewReportSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    reason: { type: String, required: true }, // "inappropriate", "spam", "offensive", "other"
+    description: { type: String },
+    reportedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const ReviewSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -24,6 +34,7 @@ const ReviewSchema = new mongoose.Schema(
     text: { type: String, required: true },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     replies: { type: [ReplySchema], default: [] },
+    reports: { type: [ReviewReportSchema], default: [] },
   },
   { timestamps: true }
 );

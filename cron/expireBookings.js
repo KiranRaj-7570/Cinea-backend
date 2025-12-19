@@ -21,6 +21,7 @@ cron.schedule("*/5 * * * *", async () => {
     if (expiryTime < now) {
       booking.bookingStatus = "expired";
       await booking.save();
+      console.log(`Booking ${booking._id} has been expired.`);
     }
   }
 });

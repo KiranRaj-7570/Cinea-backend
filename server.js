@@ -16,6 +16,7 @@ import bookRoutes from "./routes/bookRoutes.js";
 import showRoutes from "./routes/showRoutes.js";
 import adminTheatreRoutes from "./routes/adminTheatreRoutes.js";
 import adminShowRoutes from "./routes/adminShowRoutes.js";
+import adminReviewRoutes from "./routes/adminReviewRoutes.js";
 import { verifyToken } from "./middleware/authMiddleware.js";
 
 dotenv.config();
@@ -55,6 +56,7 @@ app.get("/profile", verifyToken, (req, res) => {
 
 app.use("/admin", adminTheatreRoutes);
 app.use("/admin", adminShowRoutes);
+app.use("/admin", adminReviewRoutes);
 
 app.get("/", (req, res) => {
   res.send("Backend Running");

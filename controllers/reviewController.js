@@ -173,3 +173,46 @@ export const toggleLike = async (req, res) => {
     return res.status(500).json({ message: "Failed to toggle like" });
   }
 };
+
+/**
+ * POST /reviews/:reviewId/report
+ * Report a review
+ */
+export const reportReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+    const { reason, description } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ message: "Report reason required" });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    // Check if user already reported
+    const alreadyReported = review.reports.some(
+      (r) => r.userId.toString() === userId
+    );
+    if (alreadyReported) {
+      return res.status(409).json({ message: "You already reported this review" });
+    }
+
+    // Add report
+    review.reports.push({
+      userId,
+      reason,
+      description: description || "",
+      reportedAt: new Date(),
+    });
+
+    await review.save();
+    return res.json({ message: "Review reported successfully" });
+  } catch (err) {
+    console.error("Report review error:", err);
+    return res.status(500).json({ message: "Failed to report review" });
+  }
+};

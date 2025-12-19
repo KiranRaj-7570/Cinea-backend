@@ -7,6 +7,7 @@ import {
   deleteReview,
   replyToReview,
   toggleLike,
+  reportReview,
 } from "../controllers/reviewController.js";
 
 const router = express.Router();
@@ -17,5 +18,6 @@ router.put("/:reviewId", verifyToken, updateReview); // NEW
 router.delete("/:reviewId", verifyToken, deleteReview); // NEW
 router.post("/:reviewId/reply", verifyToken, replyToReview);
 router.post("/:reviewId/like", verifyToken, toggleLike);
+router.post("/:reviewId/report", verifyToken, reportReview); // NEW
 
 export default router;

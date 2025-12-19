@@ -118,20 +118,17 @@ export const getWatchlist = async (req, res) => {
       if (item.mediaType === "tv") {
         progress = progressMap[item.tmdbId] || null;
 
-        if (progress?.seasons?.length) {
-          const isCompleted = progress.seasons.every(
-            (s) =>
-              s.totalEpisodes > 0 &&
-              s.watchedEpisodes.length === s.totalEpisodes
-          );
+        // Check if manually marked as completed OR all episodes watched
+        if (item.completed === true) {
+          status = "completed";
+          completed = true;
+        }  else if (progress?.seasons?.length) {
+  // ⚠️ DO NOT auto-complete from progress
+  if (progress.lastWatched?.episode > 0) {
+    status = "continue";
+  }
+}
 
-          if (isCompleted) {
-            status = "completed";
-            completed = true;
-          } else if (progress.lastWatched?.episode > 0) {
-            status = "continue";
-          }
-        }
       }
 
       /* ================= MOVIE ================= */
@@ -161,40 +158,178 @@ export const getWatchlist = async (req, res) => {
 };
 
 /* =====================================================
-   MARK MOVIE AS COMPLETED (MANUAL)
+   MARK AS COMPLETED (MOVIE OR TV)
 ===================================================== */
 export const markAsCompleted = async (req, res) => {
   try {
     const userId = req.user.id;
     const { tmdbId, mediaType } = req.params;
 
-    // ❗ movies only
-    if (mediaType !== "movie") {
-      return res
-        .status(400)
-        .json({ message: "Only movies can be manually completed" });
+    /* ================= MOVIE ================= */
+    if (mediaType === "movie") {
+      const item = await Watchlist.findOneAndUpdate(
+        { userId, tmdbId: Number(tmdbId), mediaType },
+        { completed: true },
+        { new: true }
+      );
+
+      if (!item) {
+        return res.status(404).json({ message: "Item not found in watchlist" });
+      }
+
+      // 🔥 invalidate caches
+      delCache(`watchlist:${userId}`);
+      delCache(`profileStats:${userId}`);
+
+      return res.json({
+        message: "Marked as completed",
+        item,
+      });
     }
 
-    const item = await Watchlist.findOneAndUpdate(
-      { userId, tmdbId: Number(tmdbId), mediaType },
-      { completed: true },
-      { new: true }
-    );
+    /* ================= TV ================= */
+    if (mediaType === "tv") {
+      // Find watchlist item
+      const watchlistItem = await Watchlist.findOne({
+        userId,
+        tmdbId: Number(tmdbId),
+        mediaType: "tv",
+      });
 
-    if (!item) {
-      return res.status(404).json({ message: "Item not found in watchlist" });
+      if (!watchlistItem) {
+        return res.status(404).json({ message: "Series not found in watchlist" });
+      }
+
+      // Mark watchlist item as completed
+      watchlistItem.completed = true;
+      await watchlistItem.save();
+
+      // Find or create TV progress document
+      let progress = await TvProgress.findOne({
+        userId,
+        tmdbId: Number(tmdbId),
+      });
+
+      if (!progress) {
+        // If no progress exists, just mark watchlist item as completed
+        // The user can still watch episodes later
+        delCache(`watchlist:${userId}`);
+        delCache(`profileStats:${userId}`);
+
+        return res.json({
+          message: "Series marked as completed!",
+          progress: {
+            userId,
+            tmdbId: Number(tmdbId),
+            seasons: [],
+            lastWatched: { season: 0, episode: 0 },
+          },
+        });
+      }
+
+      // Mark all episodes in all seasons as watched (if progress exists)
+      if (progress.seasons && progress.seasons.length > 0) {
+        for (let season of progress.seasons) {
+          if (season.totalEpisodes > 0) {
+            // Mark all episodes 1 to totalEpisodes as watched
+            season.watchedEpisodes = Array.from(
+              { length: season.totalEpisodes },
+              (_, i) => i + 1
+            );
+          }
+        }
+
+        // Update lastWatched to the last episode of the last season
+        const lastSeason = progress.seasons[progress.seasons.length - 1];
+        if (lastSeason && lastSeason.totalEpisodes > 0) {
+          progress.lastWatched = {
+            season: lastSeason.seasonNumber,
+            episode: lastSeason.totalEpisodes,
+          };
+        }
+      }
+
+      await progress.save();
+
+      // 🔥 invalidate caches
+      delCache(`watchlist:${userId}`);
+      delCache(`profileStats:${userId}`);
+      delCache(`tvProgress:${userId}:${tmdbId}`);
+
+      return res.json({
+        message: "All episodes marked as watched!",
+        progress,
+      });
     }
 
-    // 🔥 invalidate caches
-    delCache(`watchlist:${userId}`);
-    delCache(`profileStats:${userId}`);
-
-    return res.json({
-      message: "Marked as completed",
-      item,
-    });
+    return res.status(400).json({ message: "Invalid media type" });
   } catch (err) {
     console.error("Mark completed error:", err);
     return res.status(500).json({ message: "Failed to mark completed" });
+  }
+};
+
+/* =====================================================
+   UNMARK AS COMPLETED (MOVIE OR TV)
+===================================================== */
+export const unmarkAsCompleted = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { tmdbId, mediaType } = req.params;
+
+    /* ================= MOVIE ================= */
+    if (mediaType === "movie") {
+      const item = await Watchlist.findOneAndUpdate(
+        { userId, tmdbId: Number(tmdbId), mediaType },
+        { completed: false },
+        { new: true }
+      );
+
+      if (!item) {
+        return res.status(404).json({ message: "Item not found in watchlist" });
+      }
+
+      // 🔥 invalidate caches
+      delCache(`watchlist:${userId}`);
+      delCache(`profileStats:${userId}`);
+
+      return res.json({
+        message: "Unmarked as completed",
+        item,
+      });
+    }
+
+    /* ================= TV ================= */
+    if (mediaType === "tv") {
+      // Find watchlist item
+      const watchlistItem = await Watchlist.findOne({
+        userId,
+        tmdbId: Number(tmdbId),
+        mediaType: "tv",
+      });
+
+      if (!watchlistItem) {
+        return res.status(404).json({ message: "Series not found in watchlist" });
+      }
+
+      // Mark watchlist item as NOT completed
+      watchlistItem.completed = false;
+      await watchlistItem.save();
+
+      // 🔥 invalidate caches
+      delCache(`watchlist:${userId}`);
+      delCache(`profileStats:${userId}`);
+      delCache(`tvProgress:${userId}:${tmdbId}`);
+
+      return res.json({
+        message: "Series unmarked as completed",
+        item: watchlistItem,
+      });
+    }
+
+    return res.status(400).json({ message: "Invalid media type" });
+  } catch (err) {
+    console.error("Unmark completed error:", err);
+    return res.status(500).json({ message: "Failed to unmark completed" });
   }
 };
