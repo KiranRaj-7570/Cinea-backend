@@ -13,6 +13,8 @@ import {
   resetPassword,
   followOrUnfollowUser,
   getUserById,
+  getFollowers,
+  getFollowing,
 } from "../controllers/authController.js";
 import { upload } from "../config/cloudinary.js";
 
@@ -29,6 +31,9 @@ router.post("/forgot-password", forgotPassword);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", resetPassword);
 router.post("/:id/follow", verifyToken, followOrUnfollowUser);
+router.get("/users/:id/followers", verifyToken, getFollowers);
+router.get("/users/:id/following", verifyToken, getFollowing);
+
 router.post("/logout", verifyToken, logout);
 
 export default router;
