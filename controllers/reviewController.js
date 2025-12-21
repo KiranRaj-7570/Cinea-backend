@@ -143,6 +143,22 @@ export const replyToReview = async (req, res) => {
     review.replies.push(payload);
     await review.save();
 
+    // 📢 Create reply notification if replying to someone else's review
+    if (review.userId.toString() !== userId) {
+      try {
+        const { createNotification } = await import("./notificationController.js");
+        await createNotification(
+          review.userId,
+          userId,
+          "review_reply",
+          `replied to your review`,
+          { movieId: review.tmdbId, reviewId: review._id }
+        );
+      } catch (notifErr) {
+        console.error("Failed to create reply notification:", notifErr);
+      }
+    }
+
     return res.json({ message: "Reply added", reply: payload });
   } catch (err) {
     console.error("Reply error:", err);
@@ -159,9 +175,28 @@ export const toggleLike = async (req, res) => {
     if (!review) return res.status(404).json({ message: "Review not found" });
 
     const idx = review.likes.findIndex((id) => id.toString() === userId);
-    if (idx === -1) {
+    const liked = idx === -1;
+
+    if (liked) {
       review.likes.push(userId);
       await review.save();
+
+      // 📢 Create like notification if liking someone else's review
+      if (review.userId.toString() !== userId) {
+        try {
+          const { createNotification } = await import("./notificationController.js");
+          await createNotification(
+            review.userId,
+            userId,
+            "review_like",
+            `liked your review`,
+            { movieId: review.tmdbId, reviewId: review._id }
+          );
+        } catch (notifErr) {
+          console.error("Failed to create like notification:", notifErr);
+        }
+      }
+
       return res.json({ message: "Liked" });
     } else {
       review.likes.splice(idx, 1);

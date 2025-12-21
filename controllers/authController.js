@@ -325,9 +325,23 @@ export const followOrUnfollowUser = async (req, res) => {
       currentUser.following.pull(targetUserId);
       targetUser.followers.pull(currentUserId);
     } else {
-      // 🟢 FOLLOW
+      // 🟢 FOLLOW - Create notification
       currentUser.following.push(targetUserId);
       targetUser.followers.push(currentUserId);
+
+      // 📢 Create follow notification
+      try {
+        const { createNotification } = await import("./notificationController.js");
+        await createNotification(
+          targetUserId,
+          currentUserId,
+          "follow",
+          `started following you`,
+          {}
+        );
+      } catch (notifErr) {
+        console.error("Failed to create follow notification:", notifErr);
+      }
     }
 
     await currentUser.save();

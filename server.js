@@ -14,6 +14,7 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import bookRoutes from "./routes/bookRoutes.js";
 import showRoutes from "./routes/showRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import adminTheatreRoutes from "./routes/adminTheatreRoutes.js";
 import adminShowRoutes from "./routes/adminShowRoutes.js";
 import adminReviewRoutes from "./routes/adminReviewRoutes.js";
@@ -45,6 +46,7 @@ app.use("/reviews", reviewRoutes);
 app.use("/book", bookRoutes);
 app.use("/booking", bookingRoutes);
 app.use("/shows", showRoutes);
+app.use("/notifications", notificationRoutes);
 
 app.get("/profile", verifyToken, (req, res) => {
   res.json({
