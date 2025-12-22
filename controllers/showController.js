@@ -3,9 +3,7 @@ import Show from "../models/Show.js";
 import Theatre from "../models/Theatre.js";
 import { cleanupExpiredLocks } from "../utils/cleanupLocks.js";
 
-/**
- * GET /shows/movie/:movieId?city=&date=
- */
+
 export const getShowsByMovie = async (req, res) => {
   try {
     const { movieId } = req.params;
@@ -25,16 +23,12 @@ export const getShowsByMovie = async (req, res) => {
     const now = new Date();
 
     shows.forEach((show) => {
-      // 🕒 build full show datetime
       const showDateTime = new Date(`${show.date}T${show.time}:00`);
 
-      // ❌ skip past shows ONLY for today
       if (show.date === now.toISOString().slice(0, 10) && showDateTime <= now) {
         return;
       }
-
       const tid = show.theatreId._id.toString();
-
       if (!grouped[tid]) {
         grouped[tid] = {
           theatreId: tid,
@@ -43,7 +37,6 @@ export const getShowsByMovie = async (req, res) => {
         };
       }
 
-      // ✅ calculate total seats dynamically
       const screen = show.theatreId.screens.find(
         (s) => s.screenNumber === show.screenNumber
       );
@@ -72,12 +65,6 @@ export const getShowsByMovie = async (req, res) => {
   }
 };
 
-/**
- * GET /shows/:showId
- */
-/**
- * GET /shows/:showId
- */
 export const getShowById = async (req, res) => {
   try {
     const { showId } = req.params;
@@ -92,7 +79,6 @@ export const getShowById = async (req, res) => {
       return res.status(404).json({ message: "Show not found" });
     }
 
-    // 🔥 FIND SCREEN LAYOUT
     const screen = show.theatreId.screens.find(
       (s) => s.screenNumber === show.screenNumber
     );
@@ -110,10 +96,8 @@ export const getShowById = async (req, res) => {
       language: show.language,
       format: show.format,
       theatreName: show.theatreId.name,
-
-      // ✅ THIS WAS MISSING
       seatLayout: screen.seatLayout,
-      priceMap: show.priceMap, // for future price calc
+      priceMap: show.priceMap, 
     });
   } catch (err) {
     console.error(err);
@@ -121,14 +105,9 @@ export const getShowById = async (req, res) => {
   }
 };
 
-/**
- * GET /shows/:showId/seats
- */
 export const getShowSeats = async (req, res) => {
   try {
     const { showId } = req.params;
-
-    // ✅ clean expired locks ONLY for this show
     await cleanupExpiredLocks(showId);
 
     const show = await Show.findById(showId);
@@ -146,9 +125,6 @@ export const getShowSeats = async (req, res) => {
   }
 };
 
-/**
- * POST /shows/:showId/lock-seats
- */
 export const lockSeats = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -164,12 +140,9 @@ export const lockSeats = async (req, res) => {
       return res.status(404).json({ message: "Show not found" });
     }
 
-    // ❌ already booked
     if (seats.some((s) => show.bookedSeats.includes(s))) {
       return res.status(409).json({ message: "Seat already booked" });
     }
-
-    // ❌ locked by another user
     const lockedByOthers = show.lockedSeats.some(
       (s) => seats.includes(s.seatId) && s.userId.toString() !== userId
     );
@@ -178,12 +151,10 @@ export const lockSeats = async (req, res) => {
       return res.status(409).json({ message: "Seat temporarily locked" });
     }
 
-    // ✅ remove previous locks by same user ONCE
     show.lockedSeats = show.lockedSeats.filter(
       (s) => s.userId.toString() !== userId
     );
 
-    // 🔒 lock new seats
     seats.forEach((seat) => {
       show.lockedSeats.push({
         seatId: seat,

@@ -58,6 +58,25 @@ export const markAsRead = async (req, res) => {
   }
 };
 
+export const markAllAsRead = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await Notification.updateMany(
+      { userId, read: false },
+      { $set: { read: true } }
+    );
+
+    console.log("Marked notifications:", result.modifiedCount);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Mark all read error:", err);
+    return res.status(500).json({ msg: "Failed to mark all as read" });
+  }
+};
+
+
 /* ================= DELETE NOTIFICATION ================= */
 export const deleteNotification = async (req, res) => {
   try {

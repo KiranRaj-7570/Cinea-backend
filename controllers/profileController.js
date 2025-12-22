@@ -4,15 +4,10 @@ import Watchlist from "../models/Watchlist.js";
 
 export const getProfileStats = async (req, res) => {
   try {
-    // 🔥 IMPORTANT CHANGE
-    // if :userId param exists → use it
-    // else fallback to logged-in user
+  
     const targetUserId = req.params.userId || req.user.id;
-
-    /* ===================== REVIEWS ===================== */
     const reviews = await Review.find({ userId: targetUserId }).lean();
 
-    /* ---------- BEST & WORST ---------- */
     let best = null;
     let worst = null;
 
@@ -21,20 +16,17 @@ export const getProfileStats = async (req, res) => {
       worst = reviews.reduce((a, b) => (b.rating < a.rating ? b : a));
     }
 
-    /* ---------- TOP 5 ---------- */
     const topFive = await Review.find({ userId: targetUserId })
       .sort({ rating: -1, createdAt: -1 })
       .limit(5)
       .select("title rating poster mediaType tmdbId")
       .lean();
 
-    /* ---------- RECENT REVIEWS ---------- */
     const recentReviews = await Review.find({ userId: targetUserId })
       .sort({ createdAt: -1 })
       .limit(3)
       .lean();
 
-    /* ===================== GENRE DONUT ===================== */
     const completedWatchlist = await Watchlist.find({
       userId: targetUserId,
       completed: true,
@@ -47,7 +39,6 @@ export const getProfileStats = async (req, res) => {
       mediaType: item.mediaType,
     }));
 
-    /* ===================== WATCH TIME (HOURS) ===================== */
     const tvDocs = await TvProgress.find({ userId: targetUserId }).lean();
     const completedMovies = await Watchlist.find({
       userId: targetUserId,
@@ -57,7 +48,6 @@ export const getProfileStats = async (req, res) => {
 
     const watchTimeMap = {};
 
-    // ---- TV episodes (45 min = 0.75 hr) ----
     tvDocs.forEach((doc) => {
       doc.watchedEpisodes?.forEach((ep) => {
         if (!ep.watchedAt) return;
@@ -66,7 +56,6 @@ export const getProfileStats = async (req, res) => {
       });
     });
 
-    // ---- Movies (2 hrs default) ----
     completedMovies.forEach((movie) => {
       const day = new Date(movie.updatedAt).toISOString().slice(0, 10);
       watchTimeMap[day] = (watchTimeMap[day] || 0) + 2;
@@ -79,7 +68,6 @@ export const getProfileStats = async (req, res) => {
         hours: Number(hours.toFixed(2)),
       }));
 
-    /* ===================== RESPONSE ===================== */
     res.json({
       genresSource,
       watchTime,

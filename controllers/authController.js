@@ -4,8 +4,8 @@ import cloudinary from "../config/cloudinary.js";
 import User from "../models/User.js";
 import fs from "fs";
 import nodemailer from "nodemailer";
+import { delCache } from "../utils/cache.js";
 
-// SIGNUP
 export const signup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -48,7 +48,6 @@ export const signup = async (req, res) => {
   }
 };
 
-// LOGIN
 export const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -85,7 +84,6 @@ export const login = async (req, res) => {
   });
 };
 
-// GET LOGGED IN USER
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
@@ -97,7 +95,6 @@ export const getMe = async (req, res) => {
   }
 };
 
-// UPDATE PROFILE
 export const updateProfile = async (req, res) => {
   try {
     const { name, bio } = req.body;
@@ -125,7 +122,6 @@ export const uploadAvatar = async (req, res) => {
 
     const filePath = req.file.path;
 
-    // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(filePath, {
       folder: "cinea-avatars",
       width: 300,
@@ -133,7 +129,7 @@ export const uploadAvatar = async (req, res) => {
       crop: "fill",
     });
 
-    // Remove the local file after uploading
+
     fs.unlink(filePath, () => {});
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -152,7 +148,6 @@ export const uploadAvatar = async (req, res) => {
   }
 };
 
-// REMOVE AVATAR
 export const removeAvatar = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -160,11 +155,9 @@ export const removeAvatar = async (req, res) => {
     if (!user || !user.avatar) {
       return res.status(400).json({ msg: "No avatar to remove" });
     }
-
-    // Extract Cloudinary public_id
     const urlParts = user.avatar.split("/");
-    const filename = urlParts[urlParts.length - 1]; // image.jpg
-    const publicId = filename.split(".")[0]; // image
+    const filename = urlParts[urlParts.length - 1]; 
+    const publicId = filename.split(".")[0];
 
     await cloudinary.uploader.destroy(`cinea-avatars/${publicId}`);
 
@@ -183,7 +176,7 @@ export const removeAvatar = async (req, res) => {
   }
 };
 
-//Forgot Pass
+
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -195,12 +188,10 @@ export const forgotPassword = async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-
     user.resetOtp = otp;
     user.resetOtpExpire = expiry;
     await user.save();
 
-    // Email Transport
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -215,9 +206,7 @@ export const forgotPassword = async (req, res) => {
       subject: "Cinéa Password Reset OTP",
       text: `Your OTP for resetting your password is: ${otp}`,
     };
-
     await transporter.sendMail(mailOptions);
-
     res.json({ msg: "OTP sent to email" });
   } catch (err) {
     console.error("Forgot Password Error:", err);
@@ -225,7 +214,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-//verify OTP
+
 export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -247,7 +236,7 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-//reset Pass
+
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -269,7 +258,7 @@ export const resetPassword = async (req, res) => {
     user.resetOtpExpire = undefined;
     await user.save();
 
-    // Automatically authenticate user and set cookie ✨
+   
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -302,6 +291,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+
 export const followOrUnfollowUser = async (req, res) => {
   try {
     const targetUserId = req.params.id;
@@ -321,15 +311,19 @@ export const followOrUnfollowUser = async (req, res) => {
     const isFollowing = currentUser.following.includes(targetUserId);
 
     if (isFollowing) {
-      // 🔴 UNFOLLOW
       currentUser.following.pull(targetUserId);
       targetUser.followers.pull(currentUserId);
+
+      delCache(`home_friends_reviews_${currentUserId}`);
+      delCache(`home_friends_reviews_${targetUserId}`);
+
     } else {
-      // 🟢 FOLLOW - Create notification
       currentUser.following.push(targetUserId);
       targetUser.followers.push(currentUserId);
 
-      // 📢 Create follow notification
+      delCache(`home_friends_reviews_${currentUserId}`);
+      delCache(`home_friends_reviews_${targetUserId}`);
+
       try {
         const { createNotification } = await import("./notificationController.js");
         await createNotification(
@@ -347,7 +341,6 @@ export const followOrUnfollowUser = async (req, res) => {
     await currentUser.save();
     await targetUser.save();
 
-    // Return UPDATED logged-in user (important for realtime UI)
     const updatedCurrentUser = await User.findById(currentUserId).select("-password");
 
     return res.json({
@@ -361,43 +354,73 @@ export const followOrUnfollowUser = async (req, res) => {
   }
 };
 
-// LOGOUT
-export const logout = (req, res) => {
-  res.clearCookie("token");
-  res.json({ msg: "Logged out successfully" });
-};
-
-
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
-      .select("name bio avatar followers following");
-
+    .select("name bio avatar followers following");
+    
     if (!user) return res.status(404).json({ msg: "User not found" });
-
+    
     res.json({ user });
   } catch (err) {
     res.status(500).json({ msg: "Server error" });
   }
 };
 
-
 export const getFollowers = async (req, res) => {
-  const user = await User.findById(req.params.id)
+  const currentUserId = req.user.id;
+
+  const profileUser = await User.findById(req.params.id)
     .populate("followers", "name avatar")
     .lean();
 
-  if (!user) return res.status(404).json({ message: "User not found" });
+  if (!profileUser) {
+    return res.status(404).json({ message: "User not found" });
+  }
 
-  res.json({ users: user.followers });
+  const currentUser = await User.findById(currentUserId)
+    .select("following")
+    .lean();
+    
+    const users = profileUser.followers.map((u) => ({
+    ...u,
+    isFollowing: currentUser.following.some(
+      (id) => id.toString() === u._id.toString()
+    ),
+  }));
+
+  res.json({ users });
 };
 
+
+
 export const getFollowing = async (req, res) => {
-  const user = await User.findById(req.params.id)
+  const currentUserId = req.user.id;
+
+  const profileUser = await User.findById(req.params.id)
     .populate("following", "name avatar")
     .lean();
+    
+    if (!profileUser) {
+      return res.status(404).json({ message: "User not found" });
+  }
 
-  if (!user) return res.status(404).json({ message: "User not found" });
+  const currentUser = await User.findById(currentUserId)
+    .select("following")
+    .lean();
 
-  res.json({ users: user.following });
+  const users = profileUser.following.map((u) => ({
+    ...u,
+    isFollowing: currentUser.following.some(
+      (id) => id.toString() === u._id.toString()
+    ),
+  }));
+
+  res.json({ users });
+};
+
+
+export const logout = (req, res) => {
+  res.clearCookie("token");
+  res.json({ msg: "Logged out successfully" });
 };

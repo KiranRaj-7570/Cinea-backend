@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
+import homeRoutes from "./routes/homeRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
 import movieRoutes from "./routes/movieRoutes.js"
 import tvRoutes from "./routes/tvRoutes.js";
@@ -37,6 +38,7 @@ connectDB();
 
 
 app.use("/auth", authRoutes);
+app.use("/home", homeRoutes);
 app.use("/profile", profileRoutes);
 app.use("/movies", movieRoutes);
 app.use("/tvshows", tvRoutes);

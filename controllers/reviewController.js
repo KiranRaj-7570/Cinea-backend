@@ -27,6 +27,8 @@ export const createReview = async (req, res) => {
 
     await review.save();
     delCache(`profileStats:${userId}`);
+    delCache("home_global_reviews");
+    delCache(`home_friends_reviews_${userId}`);
     return res.status(201).json({ message: "Review created", review });
   } catch (err) {
     console.error("Create review error:", err);
@@ -73,7 +75,6 @@ export const updateReview = async (req, res) => {
       return res.status(404).json({ message: "Review not found" });
     }
 
-    // Only owner can edit
     if (review.userId.toString() !== userId) {
       return res.status(403).json({ message: "Not authorized" });
     }
@@ -84,6 +85,8 @@ export const updateReview = async (req, res) => {
 
     await review.save();
     delCache(`profileStats:${userId}`);
+    delCache("home_global_reviews");
+    delCache(`home_friends_reviews_${userId}`);
 
     return res.json({ message: "Review updated", review });
   } catch (err) {
@@ -102,8 +105,6 @@ export const deleteReview = async (req, res) => {
     if (!review) {
       return res.status(404).json({ message: "Review not found" });
     }
-
-    // Owner or Admin can delete
     const isOwner = review.userId.toString() === userId;
     const isAdmin = user?.role === "admin";
 
@@ -113,6 +114,8 @@ export const deleteReview = async (req, res) => {
 
     await Review.findByIdAndDelete(reviewId);
     delCache(`profileStats:${review.userId}`);
+    delCache("home_global_reviews");
+    delCache(`home_friends_reviews_${userId}`);
 
     return res.json({ message: "Review deleted" });
   } catch (err) {
@@ -143,10 +146,11 @@ export const replyToReview = async (req, res) => {
     review.replies.push(payload);
     await review.save();
 
-    // 📢 Create reply notification if replying to someone else's review
     if (review.userId.toString() !== userId) {
       try {
-        const { createNotification } = await import("./notificationController.js");
+        const { createNotification } = await import(
+          "./notificationController.js"
+        );
         await createNotification(
           review.userId,
           userId,
@@ -181,10 +185,11 @@ export const toggleLike = async (req, res) => {
       review.likes.push(userId);
       await review.save();
 
-      // 📢 Create like notification if liking someone else's review
       if (review.userId.toString() !== userId) {
         try {
-          const { createNotification } = await import("./notificationController.js");
+          const { createNotification } = await import(
+            "./notificationController.js"
+          );
           await createNotification(
             review.userId,
             userId,
@@ -209,10 +214,6 @@ export const toggleLike = async (req, res) => {
   }
 };
 
-/**
- * POST /reviews/:reviewId/report
- * Report a review
- */
 export const reportReview = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -228,15 +229,15 @@ export const reportReview = async (req, res) => {
       return res.status(404).json({ message: "Review not found" });
     }
 
-    // Check if user already reported
     const alreadyReported = review.reports.some(
       (r) => r.userId.toString() === userId
     );
     if (alreadyReported) {
-      return res.status(409).json({ message: "You already reported this review" });
+      return res
+        .status(409)
+        .json({ message: "You already reported this review" });
     }
 
-    // Add report
     review.reports.push({
       userId,
       reason,

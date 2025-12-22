@@ -2,9 +2,6 @@ import Watchlist from "../models/Watchlist.js";
 import TvProgress from "../models/TvProgress.js";
 import { getCache, setCache, delCache } from "../utils/cache.js";
 
-/* =====================================================
-   ADD TO WATCHLIST
-===================================================== */
 export const addToWatchlist = async (req, res) => {
   try {
     const { tmdbId, mediaType, title, poster, backdrop } = req.body;
@@ -22,9 +19,10 @@ export const addToWatchlist = async (req, res) => {
 
     await item.save();
 
-    // 🔥 invalidate caches
     delCache(`watchlist:${userId}`);
     delCache(`profileStats:${userId}`);
+    delCache(`watchlist_ids_${userId}`);
+    delCache(`home_activity_${userId}`);
 
     return res.status(201).json({
       message: "Added to watchlist",
@@ -40,9 +38,6 @@ export const addToWatchlist = async (req, res) => {
   }
 };
 
-/* =====================================================
-   REMOVE FROM WATCHLIST
-===================================================== */
 export const removeFromWatchlist = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -58,16 +53,16 @@ export const removeFromWatchlist = async (req, res) => {
       return res.status(404).json({ message: "Not found in watchlist" });
     }
 
-    // Remove TV progress if exists
     await TvProgress.deleteOne({
       userId,
       tmdbId: Number(tmdbId),
     });
 
-    // 🔥 invalidate caches
     delCache(`watchlist:${userId}`);
     delCache(`profileStats:${userId}`);
     delCache(`tvProgress:${userId}:${tmdbId}`);
+    delCache(`watchlist_ids_${userId}`);
+    delCache(`home_activity_${userId}`);
 
     return res.json({ message: "Removed from watchlist" });
   } catch (err) {
@@ -76,28 +71,17 @@ export const removeFromWatchlist = async (req, res) => {
   }
 };
 
-/* =====================================================
-   GET WATCHLIST (WATCHLIST / CONTINUE / COMPLETED)
-===================================================== */
 export const getWatchlist = async (req, res) => {
   try {
     const userId = req.user.id;
     const cacheKey = `watchlist:${userId}`;
-
-    // ✅ cache hit
     const cached = getCache(cacheKey);
     if (cached) {
       return res.json(cached);
     }
+    const list = await Watchlist.find({ userId }).sort({ addedAt: -1 }).lean();
 
-    // ❌ cache miss → DB
-    const list = await Watchlist.find({ userId })
-      .sort({ addedAt: -1 })
-      .lean();
-
-    const tvIds = list
-      .filter((i) => i.mediaType === "tv")
-      .map((i) => i.tmdbId);
+    const tvIds = list.filter((i) => i.mediaType === "tv").map((i) => i.tmdbId);
 
     const progressDocs = await TvProgress.find({
       userId,
@@ -114,24 +98,18 @@ export const getWatchlist = async (req, res) => {
       let completed = false;
       let progress = null;
 
-      /* ================= TV ================= */
       if (item.mediaType === "tv") {
         progress = progressMap[item.tmdbId] || null;
 
-        // Check if manually marked as completed OR all episodes watched
         if (item.completed === true) {
           status = "completed";
           completed = true;
-        }  else if (progress?.seasons?.length) {
-  // ⚠️ DO NOT auto-complete from progress
-  if (progress.lastWatched?.episode > 0) {
-    status = "continue";
-  }
-}
-
+        } else if (progress?.seasons?.length) {
+          if (progress.lastWatched?.episode > 0) {
+            status = "continue";
+          }
+        }
       }
-
-      /* ================= MOVIE ================= */
       if (item.mediaType === "movie" && item.completed === true) {
         status = "completed";
         completed = true;
@@ -140,16 +118,13 @@ export const getWatchlist = async (req, res) => {
       return {
         ...item,
         progress,
-        status,     // watchlist | continue | completed
-        completed,  // boolean
+        status,
+        completed,
       };
     });
 
     const response = { items };
-
-    // ✅ store cache
     setCache(cacheKey, response);
-
     return res.json(response);
   } catch (err) {
     console.error("Get watchlist error:", err);
@@ -157,15 +132,11 @@ export const getWatchlist = async (req, res) => {
   }
 };
 
-/* =====================================================
-   MARK AS COMPLETED (MOVIE OR TV)
-===================================================== */
 export const markAsCompleted = async (req, res) => {
   try {
     const userId = req.user.id;
     const { tmdbId, mediaType } = req.params;
 
-    /* ================= MOVIE ================= */
     if (mediaType === "movie") {
       const item = await Watchlist.findOneAndUpdate(
         { userId, tmdbId: Number(tmdbId), mediaType },
@@ -177,9 +148,10 @@ export const markAsCompleted = async (req, res) => {
         return res.status(404).json({ message: "Item not found in watchlist" });
       }
 
-      // 🔥 invalidate caches
       delCache(`watchlist:${userId}`);
       delCache(`profileStats:${userId}`);
+      delCache(`watchlist_ids_${userId}`);
+      delCache(`home_activity_${userId}`);
 
       return res.json({
         message: "Marked as completed",
@@ -187,9 +159,7 @@ export const markAsCompleted = async (req, res) => {
       });
     }
 
-    /* ================= TV ================= */
     if (mediaType === "tv") {
-      // Find watchlist item
       const watchlistItem = await Watchlist.findOne({
         userId,
         tmdbId: Number(tmdbId),
@@ -197,25 +167,23 @@ export const markAsCompleted = async (req, res) => {
       });
 
       if (!watchlistItem) {
-        return res.status(404).json({ message: "Series not found in watchlist" });
+        return res
+          .status(404)
+          .json({ message: "Series not found in watchlist" });
       }
 
-      // Mark watchlist item as completed
       watchlistItem.completed = true;
       await watchlistItem.save();
-
-      // Find or create TV progress document
       let progress = await TvProgress.findOne({
         userId,
         tmdbId: Number(tmdbId),
       });
 
-      if (!progress) {
-        // If no progress exists, just mark watchlist item as completed
-        // The user can still watch episodes later
+      if (!progress) {    
         delCache(`watchlist:${userId}`);
         delCache(`profileStats:${userId}`);
-
+        delCache(`watchlist_ids_${userId}`);
+        delCache(`home_activity_${userId}`);
         return res.json({
           message: "Series marked as completed!",
           progress: {
@@ -227,19 +195,16 @@ export const markAsCompleted = async (req, res) => {
         });
       }
 
-      // Mark all episodes in all seasons as watched (if progress exists)
       if (progress.seasons && progress.seasons.length > 0) {
         for (let season of progress.seasons) {
           if (season.totalEpisodes > 0) {
-            // Mark all episodes 1 to totalEpisodes as watched
             season.watchedEpisodes = Array.from(
               { length: season.totalEpisodes },
               (_, i) => i + 1
             );
           }
         }
-
-        // Update lastWatched to the last episode of the last season
+      
         const lastSeason = progress.seasons[progress.seasons.length - 1];
         if (lastSeason && lastSeason.totalEpisodes > 0) {
           progress.lastWatched = {
@@ -250,11 +215,11 @@ export const markAsCompleted = async (req, res) => {
       }
 
       await progress.save();
-
-      // 🔥 invalidate caches
       delCache(`watchlist:${userId}`);
       delCache(`profileStats:${userId}`);
       delCache(`tvProgress:${userId}:${tmdbId}`);
+      delCache(`watchlist_ids_${userId}`);
+      delCache(`home_activity_${userId}`);
 
       return res.json({
         message: "All episodes marked as watched!",
@@ -269,15 +234,11 @@ export const markAsCompleted = async (req, res) => {
   }
 };
 
-/* =====================================================
-   UNMARK AS COMPLETED (MOVIE OR TV)
-===================================================== */
 export const unmarkAsCompleted = async (req, res) => {
   try {
     const userId = req.user.id;
     const { tmdbId, mediaType } = req.params;
 
-    /* ================= MOVIE ================= */
     if (mediaType === "movie") {
       const item = await Watchlist.findOneAndUpdate(
         { userId, tmdbId: Number(tmdbId), mediaType },
@@ -289,9 +250,10 @@ export const unmarkAsCompleted = async (req, res) => {
         return res.status(404).json({ message: "Item not found in watchlist" });
       }
 
-      // 🔥 invalidate caches
       delCache(`watchlist:${userId}`);
       delCache(`profileStats:${userId}`);
+      delCache(`watchlist_ids_${userId}`);
+      delCache(`home_activity_${userId}`);
 
       return res.json({
         message: "Unmarked as completed",
@@ -299,9 +261,7 @@ export const unmarkAsCompleted = async (req, res) => {
       });
     }
 
-    /* ================= TV ================= */
     if (mediaType === "tv") {
-      // Find watchlist item
       const watchlistItem = await Watchlist.findOne({
         userId,
         tmdbId: Number(tmdbId),
@@ -309,17 +269,19 @@ export const unmarkAsCompleted = async (req, res) => {
       });
 
       if (!watchlistItem) {
-        return res.status(404).json({ message: "Series not found in watchlist" });
+        return res
+          .status(404)
+          .json({ message: "Series not found in watchlist" });
       }
 
-      // Mark watchlist item as NOT completed
       watchlistItem.completed = false;
       await watchlistItem.save();
 
-      // 🔥 invalidate caches
       delCache(`watchlist:${userId}`);
       delCache(`profileStats:${userId}`);
       delCache(`tvProgress:${userId}:${tmdbId}`);
+      delCache(`watchlist_ids_${userId}`);
+      delCache(`home_activity_${userId}`);
 
       return res.json({
         message: "Series unmarked as completed",

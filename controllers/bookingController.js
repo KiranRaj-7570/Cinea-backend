@@ -5,10 +5,6 @@ import razorpay from "../config/razorpay.js";
 import { cleanupExpiredLocks } from "../utils/cleanupLocks.js";
 import { fetchTMDB } from "../utils/tmdb.js";
 
-/**
- * POST /api/bookings/create
- * Create booking + Razorpay order
- */
 export const createBooking = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -18,7 +14,6 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: "Missing booking details" });
     }
 
-    // cleanup expired locks for this show
     await cleanupExpiredLocks(showId);
 
     const show = await Show.findById(showId);
@@ -26,7 +21,6 @@ export const createBooking = async (req, res) => {
       return res.status(404).json({ message: "Show not found" });
     }
 
-    // ✅ ensure seats are locked by THIS user
     const userLockedSeats = show.lockedSeats
       .filter((s) => s.userId.toString() === userId)
       .map((s) => s.seatId);
@@ -37,7 +31,6 @@ export const createBooking = async (req, res) => {
       return res.status(409).json({ message: "Seats are no longer locked" });
     }
 
-    // ✅ calculate amount using priceMap
     const amount = seats.reduce((sum, seat) => {
       const row = seat[0]; // "A1" → "A"
       return sum + (show.priceMap.get(row) || 0);
@@ -65,16 +58,14 @@ export const createBooking = async (req, res) => {
       amount,
       key: process.env.RAZORPAY_KEY_ID,
     });
+    delCache(`home_activity_${userId}`);
+    delCache(`home_booked_${userId}`);
   } catch (err) {
     console.error("Create booking error", err);
     res.status(500).json({ message: "Booking failed" });
   }
 };
 
-/**
- * POST /api/bookings/verify
- * Verify Razorpay payment
- */
 export const verifyPayment = async (req, res) => {
   try {
     const {
@@ -109,7 +100,6 @@ export const verifyPayment = async (req, res) => {
     booking.razorpaySignature = razorpay_signature;
     await booking.save();
 
-    // 🔥 move locked → booked
     const show = await Show.findById(booking.showId);
 
     show.bookedSeats.push(...booking.seats);
@@ -126,14 +116,9 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-/**
- * POST /api/bookings/failed
- * Release seats on payment failure
- */
 export const paymentFailed = async (req, res) => {
   try {
     const { bookingId } = req.body;
-
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.sendStatus(200);
 
@@ -233,8 +218,6 @@ export const getBookingTicket = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ message: "Ticket not found" });
     }
-
-    // ❌ Cancelled booking
     if (booking.bookingStatus === "cancelled") {
       return res.status(403).json({
         message: "This booking has been cancelled",
@@ -266,7 +249,6 @@ export const getBookingTicket = async (req, res) => {
   }
 };
 
-
 export const cancelBooking = async (req, res) => {
   try {
     const booking = await Booking.findOne({
@@ -283,7 +265,7 @@ export const cancelBooking = async (req, res) => {
 
     booking.bookingStatus = "cancelled";
     booking.cancelledAt = new Date();
-    booking.paymentStatus = "refunded"; // or keep "paid" if no refund
+    booking.paymentStatus = "refunded";
 
     await booking.save();
 
