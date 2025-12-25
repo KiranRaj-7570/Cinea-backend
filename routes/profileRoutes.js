@@ -5,7 +5,7 @@ import { getProfileStats } from "../controllers/profileController.js";
 const router = express.Router();
 
 router.get("/stats", verifyToken, getProfileStats);
-router.get("/stats/:userId", verifyToken, getProfileStats); // 🔥 add this
+router.get("/stats/:userId", verifyToken, getProfileStats);
 
 
 export default router;

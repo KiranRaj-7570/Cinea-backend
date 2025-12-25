@@ -4,6 +4,7 @@ import Show from "../models/Show.js";
 import razorpay from "../config/razorpay.js";
 import { cleanupExpiredLocks } from "../utils/cleanupLocks.js";
 import { fetchTMDB } from "../utils/tmdb.js";
+import { delCache } from "../utils/cache.js";
 
 export const createBooking = async (req, res) => {
   try {
@@ -58,8 +59,12 @@ export const createBooking = async (req, res) => {
       amount,
       key: process.env.RAZORPAY_KEY_ID,
     });
-    delCache(`home_activity_${userId}`);
-    delCache(`home_booked_${userId}`);
+    try {
+      delCache(`home_activity_${userId}`);
+      delCache(`home_booked_${userId}`);
+    } catch (err) {
+      console.warn("Cache clear failed:", err.message);
+    }
   } catch (err) {
     console.error("Create booking error", err);
     res.status(500).json({ message: "Booking failed" });
