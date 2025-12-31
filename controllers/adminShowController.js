@@ -1,10 +1,7 @@
 import Show from "../models/Show.js";
 import Theatre from "../models/Theatre.js";
+import { delCache } from "../utils/cache.js";
 
-/**
- * POST /admin/shows
- * Create a show for a movie
- */
 export const createShow = async (req, res) => {
   try {
     const {
@@ -33,12 +30,8 @@ export const createShow = async (req, res) => {
         .json({ message: "Invalid show configuration" });
     }
 
-    // 💰 PRICE VALIDATION (CRITICAL)
     for (const row in priceMap) {
-      if (
-        typeof priceMap[row] !== "number" ||
-        priceMap[row] <= 0
-      ) {
+      if (typeof priceMap[row] !== "number" || priceMap[row] <= 0) {
         return res.status(400).json({
           message: `Invalid price for row ${row}`,
         });
@@ -85,6 +78,9 @@ export const createShow = async (req, res) => {
       createdShows.push(show);
     }
 
+    delCache(`book_movies_${theatre.city}_${date}`);
+    delCache(`book_movies_all_${date}`);
+
     res.status(201).json({
       message: `${createdShows.length} shows created`,
     });
@@ -93,9 +89,8 @@ export const createShow = async (req, res) => {
     res.status(500).json({ message: "Failed to create show" });
   }
 };
-/**
- * GET /admin/shows
- */
+
+
 export const getAllShows = async (req, res) => {
   try {
     const shows = await Show.find()
@@ -109,11 +104,23 @@ export const getAllShows = async (req, res) => {
 };
 
 export const deleteShow = async (req, res) => {
-  const show = await Show.findById(req.params.id);
+  const show = await Show.findById(req.params.id).populate(
+    "theatreId",
+    "city"
+  );
+
   if (!show) {
     return res.status(404).json({ message: "Show not found" });
   }
 
+  const { date } = show;
+  const city = show.theatreId.city;
+
   await show.deleteOne();
+
+  delCache(`book_movies_${city}_${date}`);
+  delCache(`book_movies_all_${date}`);
+
   res.json({ message: "Show deleted" });
 };
+

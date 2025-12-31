@@ -6,6 +6,20 @@ import fs from "fs";
 import nodemailer from "nodemailer";
 import { delCache } from "../utils/cache.js";
 
+const getFormattedUser = (user) => {
+  return {
+    _id: user._id,
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    bio: user.bio,
+    avatar: user.avatar,
+    followers: user.followers || [],
+    following: user.following || [],
+  };
+};
+
 export const signup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -33,14 +47,7 @@ export const signup = async (req, res) => {
 
     res.status(201).json({
       msg: "Signup successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        bio: user.bio,
-        avatar: user.avatar,
-      },
+      user: getFormattedUser(user),
     });
   } catch (error) {
     console.error("Signup Error:", error);
@@ -51,7 +58,7 @@ export const signup = async (req, res) => {
 export const login = async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).populate("followers following");
   if (!user) return res.status(404).json({ msg: "Invalid email" });
 
   const match = await bcrypt.compare(password, user.password);
@@ -72,22 +79,20 @@ export const login = async (req, res) => {
 
   res.json({
     msg: "Login successful",
-    token : token,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      bio: user.bio,
-      avatar: user.avatar,
-    },
+    token: token,
+    user: getFormattedUser(user),
   });
 };
 
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user.id)
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
+    
     if (!user) return res.status(404).json({ msg: "User not found" });
+    
     res.json({ user });
   } catch (error) {
     console.error("GetMe Error:", error);
@@ -105,7 +110,10 @@ export const updateProfile = async (req, res) => {
       req.user.id,
       { name, bio },
       { new: true }
-    ).select("-password");
+    )
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
 
     res.json({ msg: "Profile updated", user: updatedUser });
   } catch (error) {
@@ -129,14 +137,16 @@ export const uploadAvatar = async (req, res) => {
       crop: "fill",
     });
 
-
     fs.unlink(filePath, () => {});
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
       { avatar: result.secure_url },
       { new: true }
-    ).select("-password");
+    )
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
 
     return res.json({
       msg: "Avatar updated successfully",
@@ -155,8 +165,9 @@ export const removeAvatar = async (req, res) => {
     if (!user || !user.avatar) {
       return res.status(400).json({ msg: "No avatar to remove" });
     }
+
     const urlParts = user.avatar.split("/");
-    const filename = urlParts[urlParts.length - 1]; 
+    const filename = urlParts[urlParts.length - 1];
     const publicId = filename.split(".")[0];
 
     await cloudinary.uploader.destroy(`cinea-avatars/${publicId}`);
@@ -164,7 +175,10 @@ export const removeAvatar = async (req, res) => {
     user.avatar = "";
     await user.save();
 
-    const updatedUser = await User.findById(req.user.id).select("-password");
+    const updatedUser = await User.findById(req.user.id)
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
 
     return res.json({
       msg: "Avatar removed successfully",
@@ -176,7 +190,6 @@ export const removeAvatar = async (req, res) => {
   }
 };
 
-
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -187,7 +200,7 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({ msg: "No account with this email" });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiry = Date.now() + 10 * 60 * 1000;
     user.resetOtp = otp;
     user.resetOtpExpire = expiry;
     await user.save();
@@ -214,7 +227,6 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-
 export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -235,7 +247,6 @@ export const verifyOtp = async (req, res) => {
     res.status(500).json({ msg: "Server error" });
   }
 };
-
 
 export const resetPassword = async (req, res) => {
   try {
@@ -258,7 +269,6 @@ export const resetPassword = async (req, res) => {
     user.resetOtpExpire = undefined;
     await user.save();
 
-   
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -272,25 +282,20 @@ export const resetPassword = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    const updatedUser = await User.findById(user._id)
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
+
     return res.json({
       msg: "Password reset successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-        bio: user.bio,
-        followers: user.followers,
-        following: user.following,
-      },
+      user: updatedUser,
     });
   } catch (err) {
     console.error("Reset Password Error:", err.message);
     return res.status(500).json({ msg: "Server error" });
   }
 };
-
 
 export const followOrUnfollowUser = async (req, res) => {
   try {
@@ -316,7 +321,6 @@ export const followOrUnfollowUser = async (req, res) => {
 
       delCache(`home_friends_reviews_${currentUserId}`);
       delCache(`home_friends_reviews_${targetUserId}`);
-
     } else {
       currentUser.following.push(targetUserId);
       targetUser.followers.push(currentUserId);
@@ -341,7 +345,10 @@ export const followOrUnfollowUser = async (req, res) => {
     await currentUser.save();
     await targetUser.save();
 
-    const updatedCurrentUser = await User.findById(currentUserId).select("-password");
+    const updatedCurrentUser = await User.findById(currentUserId)
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("-password");
 
     return res.json({
       msg: isFollowing ? "Unfollowed successfully" : "Followed successfully",
@@ -357,10 +364,12 @@ export const followOrUnfollowUser = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
-    .select("name bio avatar followers following");
-    
+      .populate("followers", "name avatar")
+      .populate("following", "name avatar")
+      .select("name bio avatar followers following");
+
     if (!user) return res.status(404).json({ msg: "User not found" });
-    
+
     res.json({ user });
   } catch (err) {
     res.status(500).json({ msg: "Server error" });
@@ -381,8 +390,8 @@ export const getFollowers = async (req, res) => {
   const currentUser = await User.findById(currentUserId)
     .select("following")
     .lean();
-    
-    const users = profileUser.followers.map((u) => ({
+
+  const users = profileUser.followers.map((u) => ({
     ...u,
     isFollowing: currentUser.following.some(
       (id) => id.toString() === u._id.toString()
@@ -392,17 +401,15 @@ export const getFollowers = async (req, res) => {
   res.json({ users });
 };
 
-
-
 export const getFollowing = async (req, res) => {
   const currentUserId = req.user.id;
 
   const profileUser = await User.findById(req.params.id)
     .populate("following", "name avatar")
     .lean();
-    
-    if (!profileUser) {
-      return res.status(404).json({ message: "User not found" });
+
+  if (!profileUser) {
+    return res.status(404).json({ message: "User not found" });
   }
 
   const currentUser = await User.findById(currentUserId)
@@ -418,7 +425,6 @@ export const getFollowing = async (req, res) => {
 
   res.json({ users });
 };
-
 
 export const logout = (req, res) => {
   res.clearCookie("token");
