@@ -127,46 +127,58 @@ export const reviewedByFriends = async (req, res) => {
 export const yourActivity = async (req, res) => {
   const userId = req.user.id;
   const cacheKey = `home_activity_${userId}`;
-
   const cached = getCache(cacheKey);
   if (cached) {
     return res.json(cached);
   }
-
   try {
     const items = [];
+    const tmdbIdSet = new Set(); // Track unique items
 
     const watchlist = await Watchlist.find({
       userId,
       completed: false,
-    }).limit(5).lean();
+    }).limit(8).lean();
 
     watchlist.forEach((w) => {
-      items.push({
-        type: "watchlist",
-        tmdbId: w.tmdbId,
-        mediaType: w.mediaType,
-        title: w.title,
-        poster: w.poster,
-        cta: "Continue Watching",
-      });
+      const uniqueKey = `${w.mediaType}-${w.tmdbId}`;
+      if (!tmdbIdSet.has(uniqueKey)) {
+        tmdbIdSet.add(uniqueKey);
+        items.push({
+          type: "watchlist",
+          tmdbId: w.tmdbId,
+          mediaType: w.mediaType,
+          title: w.title,
+          poster: w.poster,
+          cta: "Continue Watching",
+        });
+      }
     });
 
-    const tvProgress = await TvProgress.find({
-      userId,
-      "lastWatched.season": { $gt: 0 },
-    }).limit(5).lean();
+    // Only fetch TV progress if we still need more items
+    if (items.length < 8) {
+      const tvProgress = await TvProgress.find({
+        userId,
+        "lastWatched.season": { $gt: 0 },
+      })
+        .limit(8 - items.length)
+        .lean();
 
-    tvProgress.forEach((t) => {
-      items.push({
-        type: "tv-progress",
-        tmdbId: t.tmdbId,
-        mediaType: "tv",
-        title: t.title,
-        poster: t.poster,
-        cta: "Complete Series",
+      tvProgress.forEach((t) => {
+        const uniqueKey = `tv-${t.tmdbId}`;
+        if (!tmdbIdSet.has(uniqueKey)) {
+          tmdbIdSet.add(uniqueKey);
+          items.push({
+            type: "tv-progress",
+            tmdbId: t.tmdbId,
+            mediaType: "tv",
+            title: t.title,
+            poster: t.poster,
+            cta: "Complete Series",
+          });
+        }
       });
-    });
+    }
 
     const payload =
       items.length === 0
