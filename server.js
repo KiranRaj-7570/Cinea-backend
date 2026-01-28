@@ -43,7 +43,7 @@ app.use(cors({
 
 connectDB();
 
-app.options("*", cors());
+app.options("/*", cors());
 app.use("/auth", authRoutes);
 app.use("/home", homeRoutes);
 app.use("/profile", profileRoutes);
