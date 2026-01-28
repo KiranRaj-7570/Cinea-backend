@@ -6,6 +6,25 @@ import fs from "fs";
 import nodemailer from "nodemailer";
 import { delCache } from "../utils/cache.js";
 
+// Password validation utility
+const validatePassword = (password) => {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+  return {
+    isValid: password.length >= minLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar,
+    message: password.length < minLength 
+      ? "Password must be at least 8 characters"
+      : !hasUpperCase ? "Password must contain uppercase letters"
+      : !hasLowerCase ? "Password must contain lowercase letters"
+      : !hasNumber ? "Password must contain numbers"
+      : "Password must contain special characters (!@#$%^&*)"
+  };
+};
+
 const getFormattedUser = (user) => {
   return {
     _id: user._id,
@@ -23,6 +42,12 @@ const getFormattedUser = (user) => {
 export const signup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({ msg: passwordValidation.message });
+    }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
