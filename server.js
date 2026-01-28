@@ -32,15 +32,18 @@ app.use(express.json());
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    process.env.CLIENT_URL
+    "https://cinea-frontend.vercel.app"
   ],
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
 
 
 connectDB();
 
-
+app.options("*", cors());
 app.use("/auth", authRoutes);
 app.use("/home", homeRoutes);
 app.use("/profile", profileRoutes);
