@@ -25,12 +25,17 @@ export const signup = async (req, res) => {
     const { name, email, password } = req.body;
 
     const userExists = await User.findOne({ email });
-    if (userExists)
+    if (userExists) {
       return res.status(400).json({ msg: "Email already registered" });
+    }
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = await User.create({ name, email, password: hashed });
+    const user = await User.create({
+      name,
+      email,
+      password: hashed
+    });
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -38,52 +43,69 @@ export const signup = async (req, res) => {
       { expiresIn: "1d" }
     );
 
+    const isProd = process.env.NODE_ENV === "production";
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: isProd,                 // true on Render
+      sameSite: isProd ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.status(201).json({
       msg: "Signup successful",
-      user: getFormattedUser(user),
+      user: getFormattedUser(user)
     });
+
   } catch (error) {
     console.error("Signup Error:", error);
     res.status(500).json({ msg: "Server error" });
   }
 };
 
+
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({ email }).populate("followers following");
-  if (!user) return res.status(404).json({ msg: "Invalid email" });
+    const user = await User.findOne({ email }).populate("followers following");
 
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return res.status(401).json({ msg: "Wrong password" });
+    if (!user) {
+      return res.status(404).json({ msg: "Invalid email" });
+    }
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+    const match = await bcrypt.compare(password, user.password);
 
-  res.cookie("token", token, {
-  httpOnly: true,
-  secure: true,      
-  sameSite: "none",   
-  maxAge: 7 * 24 * 60 * 60 * 1000
-});
+    if (!match) {
+      return res.status(401).json({ msg: "Wrong password" });
+    }
 
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
 
-  res.json({
-    msg: "Login successful",
-    token: token,
-    user: getFormattedUser(user),
-  });
+    const isProd = process.env.NODE_ENV === "production";
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: isProd,                 // HTTPS required
+      sameSite: isProd ? "none" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({
+      msg: "Login successful",
+      user: getFormattedUser(user)   // DO NOT send token in response
+    });
+
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ msg: "Server error" });
+  }
 };
+
 
 export const getMe = async (req, res) => {
   try {
