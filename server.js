@@ -29,7 +29,8 @@ app.use(cors({
   origin: [
     "http://localhost:5173",
     "https://cinea-frontend.vercel.app",
-    process.env.FRONTEND_URL
+    process.env.FRONTEND_URL,
+    process.env.CLIENT_URL
   ].filter(Boolean),
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
