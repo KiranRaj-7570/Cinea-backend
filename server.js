@@ -25,10 +25,6 @@ import { verifyToken } from "./middleware/authMiddleware.js";
 dotenv.config();
 const app = express();
 
-app.use(cookieParser());
-app.use(express.json());
-
-
 app.use(cors({
   origin: [
     "http://localhost:5173",
@@ -39,6 +35,9 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+app.use(cookieParser());
+app.use(express.json());
 
 
 
